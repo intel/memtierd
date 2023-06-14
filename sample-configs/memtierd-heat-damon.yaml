@@ -1,0 +1,105 @@
+policy:
+  name: heat
+  config: |
+    # IntervalMs is the length of the period in milliseconds
+    # in which new heats are calculated for pages based on gathered
+    # tracker values, and page move tasks are triggered.
+    intervalms: 10000
+    # Cgroups is a list of cgroup paths in the filesystem. The
+    # policy manages processes in listed cgroups and recursively
+    # in their subgroups.
+    pidwatcher:
+      name: cgroups
+      config: |
+        cgroups:
+          - /sys/fs/cgroup/foobar
+    # HeatNumas maps heat class values into NUMA node lists where
+    # pages of each heat class should be located. If a heat class
+    # is missing pages in that class will not be moved.
+    heatnumas:
+      0: [2, 3]
+      3: [0, 1]
+    heatmap:
+      # HeatMax is the maximum heat of a range
+      heatmax: 0.001
+      # HeatRetention is the portion of the remaining heat in a region
+      # after one second of complete inactivity.
+      # - 1.0: heat never cools down
+      # - 0.0: all heat cools down immediately
+      # - If you want that 5 % of the heat remains after 60 seconds of inactivity,
+      #   HeatRetention = 0.05 ** (1.0/60) = 0.9513
+      heatretention: 0.99
+      # HeatClasses is the number of discrete heat classes. The default is 10,
+      # which means that address ranges are classified:
+      # heat class 0: heat [HeatMax*0/10, HeatMax*1/10)
+      # heat class 1: heat [HeatMax*1/10, HeatMax*2/10)
+      # ...
+      # heat class 9: heat [HeatMax*9/10, HeatMax*10/10]
+      heatclasses: 4
+
+    # Memory tracker configuration for the heat policy
+    tracker:
+      name: damon
+      config: |
+        # Connection specifies how to read data from DAMON in Linux kernel.
+        # The default is "bpftrace", that is preferred for Linux 6.0+.
+        # In case of issues with older Linux kernels, try "perf".
+        # These connections require "bpftrace" or "perf" tools
+        # in the system, respectively.
+        connection: bpftrace
+
+        # KdamondsList specifies which kdamond instances in the system
+        # (ls /sys/kernel/mm/damon/admin/kdamonds) are available for
+        # this damon tracker instance to use. (No effect if using debugfs.)
+        kdamondslist: [0, 1]
+
+        # NrKdamonds specifies how many kdamond instances will be
+        # initialized in the system in case there is currently 0 in
+        # /sys/kernel/mm/damon/admin/kdamonds/nr_kdamonds.
+        # Note that this number is system wide: it includes all damon
+        # trackers in the system, and cannot be modified as kdamond
+        # trackers are running. Therefore it should be initialized
+        # with large enough value.
+        # If the nr_kdamonds file already contains a non-zero value,
+        # or if NrKdamonds parameter is not given in this
+        # configuration file or equals zero, the system parameter is
+        # considered to be managed by someone else, and NrKdamonds
+        # will not affect the system configuration.
+        nrkdamonds: 4
+
+        # Interface specifies the interface how to configure DAMON.
+        # The default is 0: autodetect. This option uses sysfs when
+        # available with an option to fallback into debugfs. Value 1
+        # means sysfs, value 2 forces using to-be-deprecated debugfs
+        # interface.
+        interface: 1
+
+        # FilterAddressRangeSizeMax specifies the maximum length for
+        # an address range in which DAMON reports number of accesses
+        # and age. The default is 33554432 (32 MB).
+        # Limiting the size ignores (most) cases where DAMON reports
+        # accesses in non-contiguous virtual address ranges.
+        # Value -1 is unlimited.
+        filteraddressrangesizemax: 67108864
+
+        # Next parameters (sampling, aggregation, regionsupdate intervals
+        # min and max target regions) are passed directly to the DAMON.
+        # Refer to the DAMON documentation for details.
+        # SamplingUs is the sampling interval in microseconds.
+        samplingus: 1000
+        # AggregationUs is the aggregation interval in microseconds.
+        aggregationus: 1000000
+        # RegionsUpdateUs is the regions update interval in microseconds.
+        regionsupdateus: 5000000
+        # MinTargetRegions is the minimum monitoring target regions.
+        mintargetregions: 10
+        # MaxTargetRegions is the maximum monitoring target regions.
+        maxtargetregions: 2000
+
+    # Low-level page mover configuration
+    mover:
+      # IntervalMs is the minimum interval between subsequent moves
+      # in milliseconds.
+      intervalms: 20
+      # Bandwidth is the maximum memory bandwidth in MB/s
+      bandwidth: 200
