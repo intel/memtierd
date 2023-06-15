@@ -30,6 +30,9 @@ memtierd-os-env() {
 }
 
 memtierd-start() {
+    if [[ -n "$MEME_CGROUP" ]]; then
+        vm-command "echo 0-3 > /sys/fs/cgroup/$MEME_CGROUP/cpuset.mems"
+    fi
     if [ -z "${MEMTIERD_YAML}" ]; then
         MEMTIERD_OPTS="-prompt -debug"
     else
@@ -53,13 +56,16 @@ memtierd-command() {
 }
 
 memtierd-meme-start() {
-    vm-command "nohup meme -bs ${MEME_BS:-1G} -brc ${MEME_BRC:-0} -bwc ${MEME_BWC:-0} -bws ${MEME_BWS:-0} -bwo ${MEME_BWO:-0} -ttl ${MEME_TTL:-1h} < /dev/null > meme.output.txt 2>&1 & sleep 2; cat meme.output.txt"
+    vm-command "nohup meme -bs ${MEME_BS:-1G} -brc ${MEME_BRC:-0} -brs ${MEME_BRS:-0} -bro ${MEME_BRO:-0} -bwc ${MEME_BWC:-0} -bws ${MEME_BWS:-0} -bwo ${MEME_BWO:-0} -ttl ${MEME_TTL:-1h} < /dev/null > meme.output.txt 2>&1 & sleep 2; cat meme.output.txt"
     MEME_PID=$(awk '/pid:/{print $2}' <<< $COMMAND_OUTPUT)
     if [[ -z "$MEME_PID" ]]; then
         command-error "failed to start meme, pid not found"
     fi
     if [[ -n "$MEME_CGROUP" ]]; then
         vm-command "mkdir /sys/fs/cgroup/$MEME_CGROUP; echo $MEME_PID > /sys/fs/cgroup/$MEME_CGROUP/cgroup.procs"
+        if [[ -n "$MEME_MEMS" ]]; then
+            vm-command "echo ${MEME_MEMS} > /sys/fs/cgroup/$MEME_CGROUP/cpuset.mems"
+        fi
     fi
 }
 
