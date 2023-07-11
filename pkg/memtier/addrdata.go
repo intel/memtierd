@@ -32,6 +32,8 @@ type AddrDatas struct {
 	ads []*AddrData
 }
 
+// NewAddrData returns new AddrData instance that associates data to
+// an address range.
 func NewAddrData(addr, length uint64, data interface{}) *AddrData {
 	return &AddrData{
 		AddrRange: AddrRange{
@@ -42,13 +44,15 @@ func NewAddrData(addr, length uint64, data interface{}) *AddrData {
 	}
 }
 
+// NewAddrDatas returns a data structure that contains many address
+// ranges with different data.
 func NewAddrDatas() *AddrDatas {
 	return &AddrDatas{
 		ads: []*AddrData{},
 	}
 }
 
-// Data(addr) fetch data associated with an address.
+// Data(addr) fetches data associated with an address.
 // data, ok := ads.Data(addr)
 // behaves similarly to
 // value, ok := map[key]
@@ -61,13 +65,13 @@ func (a *AddrDatas) Data(addr uint64) (interface{}, bool) {
 }
 
 // ForEach iterates over addrdatas.
-// - handle(*AddrRange, data) is called for every entry
-//   in the ascending start address order. Handle return values:
+// - handler(*AddrRange, data) is called for every entry
+//   in the ascending start address order. Handler return values:
 //       0 (continue): ForEach continues iteration from the next element
 //       -1 (break):   ForEach returns immediately.
-func (a *AddrDatas) ForEach(handle func(*AddrRange, interface{}) int) {
+func (a *AddrDatas) ForEach(handler func(*AddrRange, interface{}) int) {
 	for _, ad := range a.ads {
-		next := handle(&ad.AddrRange, ad.data)
+		next := handler(&ad.AddrRange, ad.data)
 		switch next {
 		case 0:
 			continue
@@ -93,6 +97,9 @@ func (a *AddrDatas) Dump() string {
 	return "AddrDatas{" + strings.Join(sl, ",") + "}"
 }
 
+// SetData associates data with an address range. If the address range
+// overlaps with existing ranges with some other data, data assocated
+// with overlapping parts will be overwritten.
 func (a *AddrDatas) SetData(ar AddrRange, data interface{}) {
 	ad := NewAddrData(ar.addr, ar.length, data)
 	first, count := a.overlapping(&ad.AddrRange)
@@ -151,6 +158,8 @@ func (a *AddrDatas) SetData(ar AddrRange, data interface{}) {
 	a.ads = newAds
 }
 
+// overlapping returns index of the first overlapping address range
+// and the number of overlapping address ranges in AddrDatas.
 func (a *AddrDatas) overlapping(ar0 *AddrRange) (int, int) {
 	first := sort.Search(len(a.ads), func(i int) bool { return a.ads[i].EndAddr() > ar0.addr })
 	count := 0
