@@ -83,6 +83,7 @@ func (a *AddrDatas) ForEach(handler func(*AddrRange, interface{}) int) {
 	}
 }
 
+// Dump returns a string containing address ranges with associated values.
 func (a *AddrDatas) Dump() string {
 	sl := []string{}
 	for _, ad := range a.ads {
@@ -101,6 +102,9 @@ func (a *AddrDatas) Dump() string {
 // overlaps with existing ranges with some other data, data assocated
 // with overlapping parts will be overwritten.
 func (a *AddrDatas) SetData(ar AddrRange, data interface{}) {
+	if ar.length <= 0 {
+		return
+	}
 	ad := NewAddrData(ar.addr, ar.length, data)
 	first, count := a.overlapping(&ad.AddrRange)
 	last := first + count - 1
@@ -156,6 +160,15 @@ func (a *AddrDatas) SetData(ar AddrRange, data interface{}) {
 		newAds = append(newAds, a.ads[last+1:]...)
 	}
 	a.ads = newAds
+}
+
+func (a *AddrDatas) Sorted(less func(ad0, ad1 *AddrData) bool) []*AddrData {
+	shallowCopyOfAds := make([]*AddrData, len(a.ads))
+	copy(shallowCopyOfAds, a.ads)
+	sort.Slice(shallowCopyOfAds, func(i, j int) bool {
+		return less(shallowCopyOfAds[i], shallowCopyOfAds[j])
+	})
+	return shallowCopyOfAds
 }
 
 // overlapping returns index of the first overlapping address range

@@ -204,3 +204,49 @@ func TestOverwrite(t *testing.T) {
 	expectDataOk(29*PS, 14, true)
 	expectDataOk(30*PS, 0, false)
 }
+
+func TestSorted(t *testing.T) {
+	AR := func(addr, length uint64) AddrRange {
+		return AddrRange{addr, length}
+	}
+	ads := NewAddrDatas()
+	PS := constUPagesize
+	//1         2        3          4
+	//aeeeeefeea       hhhccccccccbb
+	ads.SetData(AR(10*PS, 10), "a")
+	ads.SetData(AR(11*PS, 8), "e")
+	ads.SetData(AR(16*PS, 1), "f")
+	ads.SetData(AR(16*PS, 0), "E0") // empty range
+	ads.SetData(AR(17*PS, 0), "E1") // empty range
+	ads.SetData(AR(19*PS, 0), "E2") // empty range
+	ads.SetData(AR(16*PS, 0), "E3") // empty range
+	ads.SetData(AR(30*PS, 10), "c")
+	ads.SetData(AR(29*PS, 1), "g")
+	ads.SetData(AR(28*PS, 3), "h") // overwrite "g"
+	ads.SetData(AR(38*PS, 2), "b")
+	sorted := ads.Sorted(func(a0, a1 *AddrData) bool {
+		s0 := a0.data.(string)
+		s1 := a1.data.(string)
+		t.Logf("compare %q < %q: %v", s0, s1, s0 < s1)
+		return s0 < s1 || (s0 == s1 && a0.Addr() < a1.Addr())
+	})
+	expected := []*AddrData{
+		NewAddrData(0xa000, 1, "a"),
+		NewAddrData(0x13000, 1, "a"),
+		NewAddrData(0x26000, 2, "b"),
+		NewAddrData(0x1f000, 7, "c"),
+		NewAddrData(0xb000, 5, "e"),
+		NewAddrData(0x11000, 2, "e"),
+		NewAddrData(0x10000, 1, "f"),
+		NewAddrData(0x1c000, 3, "h"),
+	}
+	for i := range sorted {
+		if (expected[i].Addr() != sorted[i].Addr() ||
+			expected[i].EndAddr() != sorted[i].EndAddr() ||
+			expected[i].data.(string) != sorted[i].data.(string)) {
+			t.Errorf("expected[%d] == %v, got sorted[%d] == %v", i, expected[i], i, sorted[i])
+		}
+		ad := sorted[i]
+		t.Logf("%d: %x-%x %q", i, ad.Addr(), ad.EndAddr(), ad.data)
+	}
+}
