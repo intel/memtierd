@@ -52,7 +52,7 @@ EOF
             command-error "patching kernel configuration failed"
         }
 
-        vm-install-pkg libtraceevent-dev libb2-1 libbabeltrace-dev libopencsd1 libpython3.11 libpython3.11-minimal libpython3.11-stdlib libunwind8 python3.11 python3.11-minimal debhelper systemtap-sdt-dev libunwind-dev libslang2-dev libperl-dev python-dev-is-python3 libiberty-dev liblzma-dev libcap-dev libnuma-dev pkg-config
+        vm-install-pkg libtraceevent-dev libb2-1 libbabeltrace-dev libopencsd1 libpython3.11 libpython3.11-minimal libpython3.11-stdlib libunwind8 python3.11 python3.11-minimal debhelper systemtap-sdt-dev libunwind-dev libslang2-dev libperl-dev python-dev-is-python3 libiberty-dev liblzma-dev libcap-dev libnuma-dev pkg-config bpftrace
         vm-command "cd linux; nice make -j8 bindeb-pkg" || {
             error "building debian packages failed"
         }
