@@ -1298,26 +1298,26 @@ fi
 
 if [ "$mode" == "debug" ]; then
     vm-command-q "[ -x /root/go/bin/dlv ]" || vm-install-dlv
+    if [ -d "$memtierd_src" ]; then
+        vm-dlv-add-src "$memtierd_src"
+    fi
     if [ -d "$crio_src" ]; then
         vm-dlv-add-src "$crio_src"
     fi
     if [ -d "$containerd_src" ]; then
         vm-dlv-add-src "$containerd_src"
     fi
-    if [ -d "$crirm_src" ]; then
-        vm-dlv-add-src "$crirm_src"
-    fi
     if [ -d "$runc_src" ]; then
         vm-dlv-add-src "$runc_src"
     fi
-    echo "How to debug cri-resmgr:"
-    echo "- Attach debugger to running cri-resmgr:"
+    echo "How to debug memtierd:"
+    echo "- Attach debugger to running memtierd:"
     echo "  ssh $VM_SSH_USER@$VM_IP"
-    echo "  sudo /root/go/bin/dlv attach \$(pidof cri-resmgr)"
-    echo "- Relaunch cri-resmgr in debugger:"
+    echo "  sudo /root/go/bin/dlv attach \$(pidof memtierd)"
+    echo "- Relaunch memtierd in debugger:"
     echo "  ssh $VM_SSH_USER@$VM_IP"
     echo "  sudo -i"
-    echo "  kill -9 \$(pidof cri-resmgr); /root/go/bin/dlv exec /usr/local/bin/cri-resmgr -- -force-config /home/$VM_SSH_USER/*.cfg"
+    echo "  kill -9 \$(pidof memtierd); /root/go/bin/dlv exec /usr/bin/memtierd --config memtierd.yaml -c \"\""
     echo "dlv on VM is ready for use"
     exit 0
 fi
