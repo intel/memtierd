@@ -67,6 +67,14 @@ else
     GCFLAGS=
 endif
 
+# Build with race detector on make RACE=1.
+RACE ?= 0
+ifeq ($(RACE),1)
+    RACEFLAGS=-race
+else
+    RACEFLAGS=
+endif
+
 # Release/end-to-end testing. Specify E2E_TESTS to override the default test set.
 E2E_RUN := reinstall_memtierd=1 distro=debian-sid test/e2e/run_tests.sh
 
@@ -136,7 +144,7 @@ bin/%: .static.%.$(STATIC)
 	$(Q)bin=$(notdir $@); src=./cmd/$$bin; \
 	echo "Building $$([ -n "$(STATIC)" ] && echo 'static ')$@ (version $(BUILD_VERSION), build $(BUILD_BUILDID))..."; \
 	mkdir -p bin && \
-	$(GO_BUILD) $(BUILD_TAGS) $(LDFLAGS) $(GCFLAGS) -o bin/ $$src
+	$(GO_BUILD) $(BUILD_TAGS) $(LDFLAGS) $(GCFLAGS) $(RACEFLAGS) -o bin/ $$src
 
 .static.%.$(STATIC):
 	$(Q)if [ ! -f "$@" ]; then \
