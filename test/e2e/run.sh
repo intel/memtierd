@@ -1427,7 +1427,7 @@ else
 fi
 
 # Save logs
-host-command "$SCP $VM_SSH_USER@$VM_IP:cri-resmgr*.output.txt \"$OUTPUT_DIR/\""
+host-command "$SCP $VM_SSH_USER@$VM_IP:memtierd*.output.txt \"$OUTPUT_DIR/\""
 
 # Cleanup
 if [ "$cleanup" == "0" ]; then
