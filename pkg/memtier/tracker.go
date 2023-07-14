@@ -192,8 +192,9 @@ func flattenDefaultUnion(tc0, tc1 TrackerCounter) TrackerCounter {
 
 // Flattened returns tracker counters with overlapping parts squashed.
 // Parameters:
-//   cut - returns new tc that is a cut from the address range part of tc0.
-//   union - returns new tc that represents union of tc0 and tc1.
+//
+//	cut - returns new tc that is a cut from the address range part of tc0.
+//	union - returns new tc that represents union of tc0 and tc1.
 func (tcs *TrackerCounters) Flattened(cut func(tc0 TrackerCounter, ar *AddrRange) TrackerCounter, union func(tc0, tc1 TrackerCounter) TrackerCounter) *TrackerCounters {
 	tcs.SortByAddr()
 	// Invariants:
@@ -210,9 +211,10 @@ func (tcs *TrackerCounters) Flattened(cut func(tc0 TrackerCounter, ar *AddrRange
 	for _, tc := range *tcs {
 		tcStartAddr := tc.AR.Ranges()[0].Addr()
 		tcEndAddr := tc.AR.Ranges()[0].EndAddr()
+		tcPid := tc.AR.Pid()
 
 		if len(flatTcs) == 0 ||
-			flatTcs[len(flatTcs)-1].AR.Pid() != tc.AR.Pid() ||
+			flatTcs[len(flatTcs)-1].AR.Pid() != tcPid ||
 			flatTcs[len(flatTcs)-1].AR.Ranges()[0].EndAddr() <= tcStartAddr {
 			flatTcs = append(flatTcs, tc)
 			continue
@@ -224,7 +226,7 @@ func (tcs *TrackerCounters) Flattened(cut func(tc0 TrackerCounter, ar *AddrRange
 		oltci := len(flatTcs) - 1
 		for oltci >= 0 {
 			prevEndAddr := flatTcs[oltci].AR.Ranges()[0].EndAddr()
-			if prevEndAddr < tcStartAddr {
+			if flatTcs[oltci].AR.Pid() != tcPid || prevEndAddr < tcStartAddr {
 				// No overlap at this index, the
 				// previous index was the last one.
 				oltci++
