@@ -151,6 +151,7 @@ func (t *TrackerSoftDirty) RemovePids(pids []int) {
 
 func (t *TrackerSoftDirty) removePid(pid int) {
 	delete(t.regions, pid)
+	delete(t.accesses, pid)
 }
 
 func (t *TrackerSoftDirty) ResetCounters() {
