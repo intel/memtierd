@@ -67,9 +67,10 @@ type accessCounter struct {
 }
 
 type TrackerSoftDirty struct {
-	mutex   sync.Mutex
-	config  *TrackerSoftDirtyConfig
-	regions map[int][]*AddrRanges
+	mutex        sync.Mutex
+	regionsMutex sync.Mutex
+	config       *TrackerSoftDirtyConfig
+	regions      map[int][]*AddrRanges
 	// accesses maps pid -> startAddr -> lengthPages -> num of access & writes
 	accesses  map[int]map[uint64]map[uint64]*accessCounter
 	toSampler chan byte
@@ -133,6 +134,8 @@ func (t *TrackerSoftDirty) addRanges(pid int) {
 
 func (t *TrackerSoftDirty) AddPids(pids []int) {
 	log.Debugf("TrackerSoftDirty: AddPids(%v)\n", pids)
+	t.regionsMutex.Lock()
+	defer t.regionsMutex.Unlock()
 	for _, pid := range pids {
 		t.addRanges(pid)
 	}
@@ -140,6 +143,8 @@ func (t *TrackerSoftDirty) AddPids(pids []int) {
 
 func (t *TrackerSoftDirty) RemovePids(pids []int) {
 	log.Debugf("TrackerSoftDirty: RemovePids(%v)\n", pids)
+	t.regionsMutex.Lock()
+	defer t.regionsMutex.Unlock()
 	if pids == nil {
 		t.regions = make(map[int][]*AddrRanges, 0)
 		return
@@ -220,9 +225,11 @@ func (t *TrackerSoftDirty) sampler() {
 		case <-ticker.C:
 			currentNs := time.Now().UnixNano()
 			if time.Duration(currentNs-lastRegionsUpdateNs) >= time.Duration(t.config.RegionsUpdateMs)*time.Millisecond {
-				for pid, _ := range t.regions {
+				t.regionsMutex.Lock()
+				for pid := range t.regions {
 					t.addRanges(pid)
 				}
+				t.regionsMutex.Unlock()
 				lastRegionsUpdateNs = currentNs
 			}
 			t.countPages()
@@ -232,19 +239,20 @@ func (t *TrackerSoftDirty) sampler() {
 }
 
 func (t *TrackerSoftDirty) countPages() {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
 	pmAttrs := PMPresentSet | PMExclusiveSet
 
 	var kpfFile *procKpageflagsFile
 	var err error
 
+	t.mutex.Lock()
 	trackReferenced := t.config.TrackReferenced
 	maxCount := t.config.MaxCountPerRegion
 	if maxCount == 0 {
 		maxCount = t.config.PagesInRegion
 	}
 	skipPageProb := t.config.SkipPageProb
+	pagemapReadahead := t.config.PagemapReadahead
+	t.mutex.Unlock()
 
 	cntPagesAccessed := uint64(0)
 	cntPagesWritten := uint64(0)
@@ -300,24 +308,31 @@ func (t *TrackerSoftDirty) countPages() {
 		}
 		return 0
 	}
-
-	scanStartTime := time.Now().UnixNano()
+	t.regionsMutex.Lock()
+	regions := make(map[int]*[]*AddrRanges, len(t.regions))
 	for pid, allPidAddrRanges := range t.regions {
+		regions[pid] = &allPidAddrRanges
+	}
+	t.regionsMutex.Unlock()
+	scanStartTime := time.Now().UnixNano()
+	for pid, pAllPidAddrRanges := range regions {
 		totScanned = 0
 		totAccessed = 0
 		totWritten = 0
 		pmFile, err := ProcPagemapOpen(pid)
 		if err != nil {
+			t.regionsMutex.Lock()
 			t.removePid(pid)
+			t.regionsMutex.Unlock()
 			continue
 		}
-		if t.config.PagemapReadahead > 0 {
-			pmFile.SetReadahead(t.config.PagemapReadahead)
+		if pagemapReadahead > 0 {
+			pmFile.SetReadahead(pagemapReadahead)
 		}
-		if t.config.PagemapReadahead == -1 {
+		if pagemapReadahead == -1 {
 			pmFile.SetReadahead(0)
 		}
-		for _, addrRanges := range allPidAddrRanges {
+		for _, addrRanges := range *pAllPidAddrRanges {
 			cntPagesAccessed = 0
 			cntPagesWritten = 0
 
@@ -380,9 +395,19 @@ func (t *TrackerSoftDirty) countPages() {
 	}
 }
 
+func (t *TrackerSoftDirty) regionsPids() []int {
+	t.regionsMutex.Lock()
+	defer t.regionsMutex.Unlock()
+	pids := make([]int, 0, len(t.regions))
+	for pid := range t.regions {
+		pids = append(pids, pid)
+	}
+	return pids
+}
+
 func (t *TrackerSoftDirty) clearPageBits() {
 	var err error
-	for pid := range t.regions {
+	for _, pid := range t.regionsPids() {
 		pidString := strconv.Itoa(pid)
 		path := "/proc/" + pidString + "/clear_refs"
 		err = procWrite(path, []byte("4\n"))
@@ -391,7 +416,9 @@ func (t *TrackerSoftDirty) clearPageBits() {
 		}
 		if err != nil {
 			// This process cannot be tracked anymore, remove it.
+			t.regionsMutex.Lock()
 			t.removePid(pid)
+			t.regionsMutex.Unlock()
 		}
 	}
 }
