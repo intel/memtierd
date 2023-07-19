@@ -29,6 +29,7 @@ policy:
     # Found processes can be filtered using the "filter" pidwatcher.
     # The source pidwatcher can be "cgroup" or "proc", for instance,
     # and processes can be selected based on /proc/pid/exe filepath:
+    # when the source pidwatcher is "proc",
     # pidwatcher:
     #   name: filter
     #   config: |
@@ -36,6 +37,21 @@ policy:
     #       name: proc
     #       config: |
     #         intervalms: 10000
+    #     filters:
+    #       - procexeregexp: ".*/meme"
+    #
+    # when the source pidwatcher is "cgroups",
+    # pidwatcher:
+    #   name: filter
+    #   config: |
+    #     source:
+    #       name: cgroups
+    #       config: |
+    #         intervalms: 10000
+    #         cgroups:
+    #           - /sys/fs/cgroup/foobar0
+    #           - /sys/fs/cgroup/foobar1
+    #           ...
     #     filters:
     #       - procexeregexp: ".*/meme"
 
