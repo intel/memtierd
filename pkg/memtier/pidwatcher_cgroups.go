@@ -59,6 +59,9 @@ func (w *PidWatcherCgroups) SetConfigJson(configJson string) error {
 	if config.IntervalMs == 0 {
 		config.IntervalMs = 5000
 	}
+	if len(config.Cgroups) == 0 {
+		log.Warnf("PidWatcherCgroups: cgroups config is missing\n")
+	}
 	w.config = config
 	return nil
 }
