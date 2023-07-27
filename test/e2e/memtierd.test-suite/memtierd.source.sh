@@ -62,13 +62,46 @@ memtierd-meme-start() {
         command-error "failed to start meme, pid not found"
     fi
     if [[ -n "$MEME_CGROUP" ]]; then
-        vm-command "mkdir /sys/fs/cgroup/$MEME_CGROUP; echo $MEME_PID > /sys/fs/cgroup/$MEME_CGROUP/cgroup.procs"
-        if [[ -n "$MEME_MEMS" ]]; then
-            vm-command "echo ${MEME_MEMS} > /sys/fs/cgroup/$MEME_CGROUP/cpuset.mems"
-        fi
+        vm-command "mkdir /sys/fs/cgroup/$MEME_CGROUP; echo \"${MEME_MEMS}\" > /sys/fs/cgroup/$MEME_CGROUP/cpuset.mems; echo $MEME_PID > /sys/fs/cgroup/$MEME_CGROUP/cgroup.procs"
     fi
 }
 
 memtierd-meme-stop() {
     vm-command "killall -KILL meme"
+    if [[ -n "$MEME_CGROUP" ]]; then
+        vm-command "sudo rmdir /sys/fs/cgroup/$MEME_CGROUP"
+    fi
+}
+
+next-round() {
+    local round_counter_var=$1
+    local round_counter_val=${!1}
+    local round_counter_max=$2
+    local round_delay=$3
+    if [[ "$round_counter_val" -ge "$round_counter_max" ]]; then
+        return 1
+    fi
+    eval "$round_counter_var=$(($round_counter_val + 1))"
+    sleep $round_delay
+    return 0
+}
+
+memtierd-verify-scanned-pids() {
+    local expected_pid_count=$#
+
+    for pid_regexp in "$@"; do
+      round_number=0
+      while ! ( memtierd-command "stats -t memory_scans -f csv | awk -F, \"{print \\\$1}\""; grep ${pid_regexp} <<< $COMMAND_OUTPUT) ; do
+        echo "grep pid matching ${pid_regexp} not found"
+        next-round round_number 5 1 || {
+            error "timeout: memtierd did not watch ${pid_regexp}"
+        }
+      done
+    done
+
+    memtierd-command 'stats -t memory_scans -f csv'
+    observed_pid_count="$(grep ^[0-9] <<< "$COMMAND_OUTPUT" | wc -l)"
+    if [[ "$observed_pid_count"  != "$expected_pid_count" ]]; then
+        error "expected memtierd to watch ${expected_pid_count} pids, but got ${observed_pid_count} pids"
+    fi
 }
