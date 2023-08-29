@@ -130,6 +130,8 @@ func GetStats() *Stats {
 // process_madvise(pid, advise) has been called. If pid==-1 or
 // advise==-1, then return the sum of pages of all pids and advises.
 func (s *Stats) MadvisedPageCount(pid int, advise int) uint64 {
+	s.Lock()
+	defer s.Unlock()
 	totalPages := uint64(0)
 	for spid, spm := range s.pidMadvises {
 		if pid != -1 && pid != spid {
