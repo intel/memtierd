@@ -112,6 +112,9 @@ func main() {
 	}
 
 	for r, routine := range routines {
+		if policy != nil {
+			routine.SetPolicy(policy)
+		}
 		if err := routine.Start(); err != nil {
 			exit("error in starting routine %d: %s", r+1, err)
 		}

@@ -27,6 +27,7 @@ type RoutineConfig struct {
 type Routine interface {
 	SetConfigJson(string) error // Set new configuration.
 	GetConfigJson() string      // Get current configuration.
+	SetPolicy(Policy) error     // Set a policy.
 	Start() error
 	Stop()
 	Dump(args []string) string

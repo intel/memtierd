@@ -51,6 +51,7 @@ type RoutineStatActionsConfig struct {
 type RoutineStatActions struct {
 	config           *RoutineStatActionsConfig
 	lastPageOutPages uint64
+	policy           Policy
 	cgLoop           chan interface{}
 }
 
@@ -66,17 +67,18 @@ const (
 var commandRunners map[string]commandRunnerFunc
 
 func init() {
-	commandRunners = map[string]commandRunnerFunc{
-		commandRunnerExec:          runCommandExec,
-		commandRunnerDefault:       runCommandExec,
-		commandRunnerMemtier:       runCommandMemtier,
-		commandRunnerMemtierPrompt: runCommandMemtierPrompt,
-	}
 	RoutineRegister("statactions", NewRoutineStatActions)
 }
 
 func NewRoutineStatActions() (Routine, error) {
-	return &RoutineStatActions{}, nil
+	r := &RoutineStatActions{}
+	commandRunners = map[string]commandRunnerFunc{
+		commandRunnerExec:          r.runCommandExec,
+		commandRunnerDefault:       r.runCommandExec,
+		commandRunnerMemtier:       r.runCommandMemtier,
+		commandRunnerMemtierPrompt: r.runCommandMemtierPrompt,
+	}
+	return r, nil
 }
 
 func (r *RoutineStatActions) SetConfigJson(configJson string) error {
@@ -105,6 +107,11 @@ func (r *RoutineStatActions) GetConfigJson() string {
 	return ""
 }
 
+func (r *RoutineStatActions) SetPolicy(policy Policy) error {
+	r.policy = policy
+	return nil
+}
+
 func (r *RoutineStatActions) Start() error {
 	if r.config == nil {
 		return fmt.Errorf("cannot start without configuration")
@@ -130,7 +137,7 @@ func (r *RoutineStatActions) Dump(args []string) string {
 	return fmt.Sprintf("routine \"statactions\": running=%v", r.cgLoop != nil)
 }
 
-func runCommandExec(command []string) error {
+func (r *RoutineStatActions) runCommandExec(command []string) error {
 	if len(command) == 0 {
 		return nil
 	}
@@ -140,17 +147,20 @@ func runCommandExec(command []string) error {
 	return err
 }
 
-func runCommandMemtier(command []string) error {
+func (r *RoutineStatActions) runCommandMemtier(command []string) error {
 	if len(command) == 0 {
 		return nil
 	}
 	prompt := NewPrompt("", nil, bufio.NewWriter(os.Stdout))
+	if r.policy != nil {
+		prompt.SetPolicy(r.policy)
+	}
 	status := prompt.RunCmdSlice(command)
 	stats.Store(StatsHeartbeat{fmt.Sprintf("RoutineStatActions.command.memtier: %s... status: %d", command[0], status)})
 	return nil
 }
 
-func runCommandMemtierPrompt(command []string) error {
+func (r *RoutineStatActions) runCommandMemtierPrompt(command []string) error {
 	if len(command) == 0 {
 		return nil
 	}
@@ -158,6 +168,9 @@ func runCommandMemtierPrompt(command []string) error {
 		return fmt.Errorf("invalid command for command runner %q: expected a list with a single string, got %q", commandRunnerMemtierPrompt, command)
 	}
 	prompt := NewPrompt("", nil, bufio.NewWriter(os.Stdout))
+	if r.policy != nil {
+		prompt.SetPolicy(r.policy)
+	}
 	status := prompt.RunCmdString(command[0])
 	stats.Store(StatsHeartbeat{fmt.Sprintf("RoutineStatActions.command.memtier-prompt: %q status: %d", command[0], status)})
 	return nil
