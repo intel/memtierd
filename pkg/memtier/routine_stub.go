@@ -33,6 +33,10 @@ func (r *RoutineStub) GetConfigJson() string {
 	return ""
 }
 
+func (r *RoutineStub) SetPolicy(Policy) error {
+	return nil
+}
+
 func (r *RoutineStub) Start() error {
 	return nil
 }
