@@ -316,11 +316,11 @@ func (p *Prompt) cmdSwap(args []string) CommandStatus {
 	}
 	if *swapIn {
 		memFile, err := ProcMemOpen(ar.Pid())
-		defer memFile.Close()
 		if err != nil {
 			p.output("%s\n", err)
 			return csOk
 		}
+		defer memFile.Close()
 		for _, r := range ar.Ranges() {
 			if err = memFile.ReadNoData(r.Addr(), r.EndAddr()); err != nil {
 				p.output("%s\n", err)
@@ -696,13 +696,14 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 		return csOk
 	}
 	if *create != "" {
-		if pidwatcher, err := NewPidWatcher(*create); err != nil {
+		pidwatcher, err := NewPidWatcher(*create)
+		if err != nil {
 			p.output("creating pidwatcher failed: %v\n", err)
 			return csOk
-		} else {
-			p.pidwatcher = pidwatcher
-			p.output("pidwatcher created\n")
 		}
+		p.pidwatcher = pidwatcher
+		p.output("pidwatcher created\n")
+
 	}
 	// Next actions will require existing pidwatcher
 	if p.pidwatcher == nil {
@@ -772,13 +773,13 @@ func (p *Prompt) cmdTracker(args []string) CommandStatus {
 		return csOk
 	}
 	if *create != "" {
-		if tracker, err := NewTracker(*create); err != nil {
+		tracker, err := NewTracker(*create)
+		if err != nil {
 			p.output("creating tracker failed: %v\n", err)
 			return csOk
-		} else {
-			p.tracker = tracker
-			p.output("tracker created\n")
 		}
+		p.tracker = tracker
+		p.output("tracker created\n")
 	}
 	// Next actions will require existing tracker
 	if p.tracker == nil {

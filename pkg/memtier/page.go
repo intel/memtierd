@@ -170,7 +170,7 @@ func (pp *Pages) OnNode(node Node) *Pages {
 	return np
 }
 
-// OnNode returns only those Pages that are not on the given node.
+// NotOnNode returns only those Pages that are not on the given node.
 func (pp *Pages) NotOnNode(node Node) *Pages {
 	currentStatus, err := pp.status()
 	if err != nil {
