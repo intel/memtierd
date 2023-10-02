@@ -370,7 +370,7 @@ func (sysfs *damonSysfs) initialize(config *TrackerDamonConfig) error {
 	}
 	if globalNrKdamonds == 0 {
 		if config.NrKdamonds == 0 {
-			return fmt.Errorf("no kdamonds available in the system (%q) and DAMON tracker configuration NrKdamonds equals 0. Either one must be > 0.", nrKdamondsPath)
+			return fmt.Errorf("no kdamonds available in the system (%q) and DAMON tracker configuration NrKdamonds equals 0, either one must be > 0", nrKdamondsPath)
 		}
 		if err = procWriteInt(nrKdamondsPath, config.NrKdamonds); err != nil {
 			return fmt.Errorf("writing DAMON tracker configuration NrKdamonds (%d) to %q failed: %s", config.NrKdamonds, nrKdamondsPath, err)
@@ -543,9 +543,8 @@ func (sysfs *damonSysfs) AggregatedPid(kdamondPid int, targetId uint64) int {
 	if targetIdPid, ok := sysfs.kdamondPidTargetIdPid[kdamondPid]; ok {
 		if targetId < uint64(len(targetIdPid)) {
 			return targetIdPid[targetId]
-		} else {
-			stats.Store(StatsHeartbeat{"TrackerDamon.sysfs.AggregatedPid: unknown targetId"})
 		}
+		stats.Store(StatsHeartbeat{"TrackerDamon.sysfs.AggregatedPid: unknown targetId"})
 	} else {
 		stats.Store(StatsHeartbeat{"TrackerDamon.sysfs.AggregatedPid: unknown kdamond pid"})
 	}
@@ -730,16 +729,18 @@ func (t *TrackerDamon) bpftraceStart(kpids []int) (*exec.Cmd, *bufio.Reader, err
 	}
 	bpftraceOutput := bufio.NewReader(outPipe)
 	log.Debugf("TrackerDamon: launching bpftrace...")
-	if err = cmd.Start(); err != nil {
+
+	err = cmd.Start()
+	if err != nil {
 		return nil, nil, fmt.Errorf("starting bpftrace failed: %w", err)
-	} else {
-		/* Read the "Attaching 1 probe..." line */
-		_, err := fmt.Fscanf(bpftraceOutput, "Attaching 1 probe...\n")
-		if err != nil {
-			return nil, nil, fmt.Errorf("TrackerDamon.bpftraceStart: reading the first line of bpftrace output failed: %s", err)
-		}
-		log.Debugf("TrackerDamon.bpftraceStart: bpftrace started successfully")
 	}
+	/* Read the "Attaching 1 probe..." line */
+	_, err = fmt.Fscanf(bpftraceOutput, "Attaching 1 probe...\n")
+	if err != nil {
+		return nil, nil, fmt.Errorf("TrackerDamon.bpftraceStart: reading the first line of bpftrace output failed: %s", err)
+	}
+	log.Debugf("TrackerDamon.bpftraceStart: bpftrace started successfully")
+
 	return cmd, bpftraceOutput, nil
 }
 

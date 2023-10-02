@@ -50,10 +50,10 @@ func parseTimeDuration(s string) (time.Duration, error) {
 	numpart := s[0 : len(s)-suffixLen]
 	f, err := strconv.ParseFloat(strings.TrimSpace(numpart), 64)
 	if err != nil {
-		return time.Duration(0), fmt.Errorf("syntax error in time duration %s %w, expected [1-9][0-9]*(ns|us|ms|s|m|h)?\n", s, err)
+		return time.Duration(0), fmt.Errorf("syntax error in time duration %s %w, expected [1-9][0-9]*(ns|us|ms|s|m|h)?", s, err)
 	}
 	if math.IsNaN(f) {
-		return time.Duration(0), fmt.Errorf("invalid time duration %s, number or inf expected\n", s)
+		return time.Duration(0), fmt.Errorf("invalid time duration %s, number or inf expected", s)
 	}
 	return time.Duration(f * factor), nil
 }

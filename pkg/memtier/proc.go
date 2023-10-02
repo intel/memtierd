@@ -152,11 +152,11 @@ func procRead(path string) (string, error) {
 }
 
 func procReadTrimmed(path string) (string, error) {
-	if s, err := procRead(path); err != nil {
+	s, err := procRead(path)
+	if err != nil {
 		return "", err
-	} else {
-		return strings.TrimSpace(s), nil
 	}
+	return strings.TrimSpace(s), nil
 }
 
 func procReadInt(path string) (int, error) {
@@ -480,7 +480,7 @@ func (f *procPagemapFile) ForEachPage(addressRanges []AddrRange, pageAttributes 
 						readData = readData[0:0]
 					}
 				default:
-					return fmt.Errorf("page handler callback returned invalid value: %d\n", n)
+					return fmt.Errorf("page handler callback returned invalid value: %d", n)
 				}
 
 			}

@@ -74,17 +74,18 @@ func init() {
 }
 
 func NewTrackerIdlePage() (Tracker, error) {
-	if bmFile, err := ProcPageIdleBitmapOpen(); err != nil {
+	bmFile, err := ProcPageIdleBitmapOpen()
+	if err != nil {
 		return nil, fmt.Errorf("no idle page platform support: %s", err)
-	} else {
-		bmFile.Close()
 	}
+	bmFile.Close()
+
 	t := &TrackerIdlePage{
 		regions:  make(map[int][]*AddrRanges),
 		accesses: make(map[int]map[uint64]map[uint64]*accessCounter),
 		pmAttrs:  PMPresentSet | PMExclusiveSet,
 	}
-	err := t.SetConfigJson(trackerIdlePageDefaults)
+	err = t.SetConfigJson(trackerIdlePageDefaults)
 	if err != nil {
 		return nil, fmt.Errorf("invalid idlepage default configuration")
 	}
