@@ -236,11 +236,14 @@ golangci-lint:
 	$(Q)$(GO_CILINT) run $(GO_CILINT_RUNFLAGS) $(GO_CILINT_CHECKERS)
 
 shellcheck:
-	$(Q)for f in $$(git grep -n '^#!/bin/.*sh *' | grep ':1:#!' | sed 's/:1:.*//'); do \
-	    echo "shellchecking $$f..."; \
-	    $(SHELLCHECK) $$f; \
-	done
-
+	$(Q)if hash $(SHELLCHECK) 2> /dev/null; then \
+			for f in `find . -type f -name "*.sh"`; do \
+				echo "shellchecking $$f..."; \
+				$(SHELLCHECK) $$f; \
+			done \
+		else \
+			echo "shellcheck not installed, skip shellcheck"; \
+		fi
 
 #
 # Rules for running unit/module tests.
