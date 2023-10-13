@@ -550,3 +550,16 @@ Configuration parameters:
   `pageoutmb` interval.
 - `pageoutcommandrunner` specifies how `pageoutcommand` is executed,
   see `intervalcommandrunner` for options.
+- `timestamp` specifies how to format timestamps that are printed just
+  before running a command. The default is an empty string, that is,
+  timestamp is not printed. The format string accepts templates as in
+  Go [Time.Format](https://pkg.go.dev/time#Time.Format), and
+  shorthands including
+  - `unix.s`, `unix.milli`, `unix.micro`, `unix.nano` for printing
+    Unix epoch
+  - `duration.s`, `duration.milli`, `duration.micro`, `duration.nano`
+    for printing seconds since starting the routine, and
+  - `rfc822`, `rfc822z`, `rfc850`, `rfc1123`, `rfc3339`,
+  `rfc3339nano`, for printing standard human readable timestamps.
+- `timestampafter` is like `timestamp`, but specifies format for
+  timestamps after running a command.

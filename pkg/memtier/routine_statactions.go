@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,6 +49,15 @@ type RoutineStatActionsConfig struct {
 	// PageOutCommandRunner executes the PageOutCommand.
 	// See IntervalCommandRunner for options.
 	PageOutCommandRunner string
+	// Timestamp defines the format of a timestamp that is printed
+	// before running a command. The default is empty: no
+	// timestamp. Use lowercase definitions in golang Time.Format
+	// (for instance "rfc3339nano" or "rfc822z") or use "unix",
+	// "unix.milli", "unix.micro".
+	Timestamp string
+	// TimestampAfter is like timestamp but printed after
+	// running a command.
+	TimestampAfter string
 }
 
 type RoutineStatActions struct {
@@ -53,6 +65,7 @@ type RoutineStatActions struct {
 	lastPageOutPages uint64
 	policy           Policy
 	cgLoop           chan interface{}
+	startedUnixFloat float64
 }
 
 type commandRunnerFunc func([]string) error
@@ -120,6 +133,7 @@ func (r *RoutineStatActions) Start() error {
 		return fmt.Errorf("already started")
 	}
 	r.cgLoop = make(chan interface{})
+	r.startedUnixFloat = float64(time.Now().UnixNano()) / 1e9
 	go r.loop()
 	return nil
 }
@@ -176,12 +190,84 @@ func (r *RoutineStatActions) runCommandMemtierPrompt(command []string) error {
 	return nil
 }
 
-func runCommand(runner string, command []string) error {
+func (r *RoutineStatActions) timestamp(tsFmt string) string {
+	t := time.Now()
+	fmts := map[string]string{
+		"ansic":       time.ANSIC,
+		"unixdate":    time.UnixDate,
+		"rfc822":      time.RFC822,
+		"rfc822z":     time.RFC822Z,
+		"rfc850":      time.RFC850,
+		"rfc1123":     time.RFC1123,
+		"rfc3339":     time.RFC3339,
+		"rfc3339nano": time.RFC3339Nano,
+	}
+	keys := make([]string, 0, len(fmts))
+	for key := range fmts {
+		keys = append(keys, key)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(keys)))
+	for _, key := range keys {
+		tsFmt = strings.Replace(tsFmt, key, fmts[key], -1)
+	}
+	s := t.Format(tsFmt)
+	unixTimeFloat := float64(t.UnixNano()) / 1e9
+	for strings.Contains(s, "unix") {
+		token := "unix"
+		d := 0
+		switch {
+		case strings.Contains(s, "unix.s"):
+			token = "unix.s"
+		case strings.Contains(s, "unix.milli"):
+			d = 3
+			token = "unix.milli"
+		case strings.Contains(s, "unix.micro"):
+			d = 6
+			token = "unix.micro"
+		case strings.Contains(s, "unix.nano"):
+			d = 9
+			token = "unix.nano"
+		}
+		unixTimeStr := fmt.Sprintf("%."+strconv.Itoa(d)+"f",
+			unixTimeFloat)
+		s = strings.Replace(s, token, unixTimeStr, -1)
+	}
+	for strings.Contains(s, "duration") {
+		token := "duration"
+		d := 0
+		switch {
+		case strings.Contains(s, "duration.s"):
+			token = "duration.s"
+		case strings.Contains(s, "duration.milli"):
+			d = 3
+			token = "duration.milli"
+		case strings.Contains(s, "duration.micro"):
+			d = 6
+			token = "duration.micro"
+		case strings.Contains(s, "duration.nano"):
+			d = 9
+			token = "duration.nano"
+		}
+		durationTimeStr := fmt.Sprintf("%."+strconv.Itoa(d)+"f",
+			unixTimeFloat - r.startedUnixFloat)
+		s = strings.Replace(s, token, durationTimeStr, -1)
+	}
+	return s
+}
+
+func (r *RoutineStatActions) runCommand(runner string, command []string) error {
 	commandRunner, ok := commandRunners[runner]
 	if !ok {
 		return fmt.Errorf("invalid command runner '%s'", runner)
 	}
-	return commandRunner(command)
+	if r.config.Timestamp != "" {
+		fmt.Printf(r.timestamp(r.config.Timestamp))
+	}
+	err := commandRunner(command)
+	if r.config.TimestampAfter != "" {
+		fmt.Printf(r.timestamp(r.config.TimestampAfter))
+	}
+	return err
 }
 
 func (r *RoutineStatActions) loop() {
@@ -209,7 +295,7 @@ func (r *RoutineStatActions) loop() {
 
 		// IntervalCommand runs on every round
 		if len(r.config.IntervalCommand) > 0 {
-			if err := runCommand(r.config.IntervalCommandRunner, r.config.IntervalCommand); err != nil {
+			if err := r.runCommand(r.config.IntervalCommandRunner, r.config.IntervalCommand); err != nil {
 				log.Errorf("routines statactions intervalcommand: %s", err)
 			}
 			stats.Store(StatsHeartbeat{"RoutineStatActions.IntervalCommand"})
@@ -220,7 +306,7 @@ func (r *RoutineStatActions) loop() {
 			(nowPageOutPages-r.lastPageOutPages)*constUPagesize/uint64(1024*1024) >= uint64(r.config.PageOutMB) {
 			r.lastPageOutPages = nowPageOutPages
 			stats.Store(StatsHeartbeat{"RoutineStatActions.PageOutCommand"})
-			if err := runCommand(r.config.PageOutCommandRunner, r.config.PageOutCommand); err != nil {
+			if err := r.runCommand(r.config.PageOutCommandRunner, r.config.PageOutCommand); err != nil {
 				log.Errorf("routines statactions pageoutcommand: %s", err)
 			}
 		}
