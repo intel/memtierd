@@ -245,7 +245,7 @@ func (p *PolicyRatio) move(tcs *TrackerCounters, destNode Node) {
 	}
 }
 
-// getBytesInTargetNuma() returns the pages info of the memory which is not located on the original node(s),
+// getBytesInTargetNuma() returns how many bytes which is not located on the original node(s),
 // this function will be called when moving memory among numa nodes
 func (p *PolicyRatio) getBytesInTargetNuma(pid int) (uint64, error) {
 	// Obtain all the memory address ranges for the given pid
@@ -274,7 +274,7 @@ func (p *PolicyRatio) getBytesInTargetNuma(pid int) (uint64, error) {
 	return uint64(len(pp.pages)) * constUPagesize, nil
 }
 
-// getBytesInSwap() returns the AddrRanges info of the memory which has been swapped out,
+// getBytesInSwap() returns the how many bytes which have been swapped out,
 // this function will be called when swapping in and out memory
 func (p *PolicyRatio) getBytesInSwap(pid int) (uint64, error) {
 	// Obtain all the memory address ranges for the given pid
@@ -299,39 +299,20 @@ func (p *PolicyRatio) getBytesInSwap(pid int) (uint64, error) {
 	defer pmFile.Close()
 
 	pages := 0
-	swapped := 0
-	vaddrStart := uint64(0)
-	vaddrEnd := uint64(0)
-	addrRanges := AddrRanges{}
-	addrRanges.pid = pid
-	addrRanges.addrs = []AddrRange{}
-
+	swapped := uint64(0)
 	pmFile.ForEachPage(ar.Ranges(), 0,
 		func(pmBits, pageAddr uint64) int {
 			pages++
 			if (pmBits>>PMB_SWAP)&1 == 0 { // Not Swap
-				if vaddrStart > 0 {
-					log.Debugf("%s\n", NewAddrRange(vaddrStart, vaddrEnd))
-				}
-				vaddrStart = 0
 				return 0
 			}
 			swapped++
-			vaddrEnd = pageAddr + constUPagesize
-			if vaddrStart == 0 {
-				vaddrStart = pageAddr
-			}
-			addrRanges.addrs = append(addrRanges.addrs, *NewAddrRange(vaddrStart, vaddrEnd))
 			return 0
 		})
-	if vaddrStart > 0 {
-		log.Debugf("%s\n", NewAddrRange(vaddrStart, vaddrEnd))
-	}
-
 	log.Debugf("getAddrRangesInSwapSpace %d / %d pages, %d / %d MB (%.1f %%) swapped out\n", swapped, pages,
 		int64(swapped)*constPagesize/(1024*1024), int64(pages)*constPagesize/(1024*1024),
 		float32(100*swapped)/float32(pages))
-	return uint64(len(addrRanges.Ranges())) * constUPagesize, nil
+	return swapped * constUPagesize, nil
 }
 
 // getRatioCounters() returns the counters recording the info of the corresponding pages
