@@ -87,6 +87,9 @@ func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, cou
 	}()
 	perfPrintStart := time.Now()
 	perfPrintRounds := int64(0)
+
+	loopStart := time.Now()
+
 	for ba.readers > 0 || ba.writers > 0 {
 		roundStartIndex := (offset + (offsetDelta * round)) % int64(len(b))
 		roundCount := count + (countDelta * round)
@@ -104,12 +107,17 @@ func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, cou
 				bValue += b[i]
 			}
 		}
-		if interval > 0 {
-			time.Sleep(interval)
+		loopDuration := time.Since(loopStart)
+
+		sleepDuration := interval - loopDuration
+		if sleepDuration > 0 {
+			time.Sleep(sleepDuration)
 			if interval >= 1000000 {
 				fmt.Printf("wake exerciser %d: round %d range %x-%x\n", exerciserId, round, &b[roundStartIndex], &b[roundStartIndex+roundCount-1])
 			}
 		}
+
+		loopStart = time.Now()
 		round += 1
 		if perfPrintInterval > 0 {
 			perfPrintDuration := time.Since(perfPrintStart)
