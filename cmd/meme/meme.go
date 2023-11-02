@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"runtime"
 	"strconv"
@@ -55,7 +56,7 @@ var bReadSizeDelta int64
 var bReadOffset int64
 var bReadOffsetDelta int64
 var bReadInterval time.Duration
-var bReadPortion int64
+var bReadPortions int
 
 var bWriterCount int
 var bWriteSize int64
@@ -63,13 +64,13 @@ var bWriteSizeDelta int64
 var bWriteOffset int64
 var bWriteOffsetDelta int64
 var bWriteInterval time.Duration
-var bWritePortion int64
+var bWritePortions int
 
 var perfPrintInterval time.Duration
 
 var constPagesize int = os.Getpagesize()
 
-func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, count int64, interval time.Duration, portion int64, offsetDelta int64, countDelta int64) {
+func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, count int64, interval time.Duration, portionCount int, offsetDelta int64, countDelta int64) {
 	b := ba.b
 	if count >= int64(len(b[offset:])) {
 		count = int64(len(b[offset:])) - 1
@@ -92,37 +93,39 @@ func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, cou
 
 	loopStart := time.Now()
 
+	if portionCount < 1 {
+		portionCount = 1
+	}
+	portionOrder := make([]int, portionCount)
+	for p := 0; p < len(portionOrder); p++ {
+		portionOrder[p] = p
+	}
+	rand.Shuffle(len(portionOrder), func(i, j int) { portionOrder[i], portionOrder[j] = portionOrder[j], portionOrder[i] })
+	if len(portionOrder) > 1 {
+		fmt.Printf("portion order: %v\n", portionOrder)
+	}
+
 	for ba.readers > 0 || ba.writers > 0 {
 		roundStartIndex := (offset + (offsetDelta * round)) % int64(len(b))
 		roundCount := count + (countDelta * round)
 		if roundCount+roundStartIndex >= int64(len(b)) {
 			roundCount = int64(len(b)) - roundStartIndex
 		}
+		portionSize := roundCount / int64(portionCount)
 		if write {
-			if portion <= 1 {
-				for i := roundStartIndex; i < roundStartIndex+roundCount; i++ {
-					b[i] = bValue
-					bValue += 1
-				}
-			} else {
-				portionSize := roundCount / portion
-				for i := int64(0); i < roundCount; i++ {
-					nextIndex := (i / portion) + (i%portion)*portionSize
-					b[roundStartIndex+nextIndex] = bValue
+			for i := int64(0); i < portionSize; i++ {
+				for p := 0; p < portionCount; p++ {
+					nextIndex := roundStartIndex + int64(portionOrder[p])*portionSize + i
+					b[nextIndex] = bValue
 					bValue += 1
 				}
 			}
 		}
 		if read {
-			if portion <= 1 {
-				for i := roundStartIndex; i < roundStartIndex+roundCount; i++ {
-					bValue += b[i]
-				}
-			} else {
-				portionSize := roundCount / portion
-				for i := int64(0); i < roundCount; i++ {
-					nextIndex := (i / portion) + (i%portion)*portionSize
-					bValue += b[roundStartIndex+nextIndex]
+			for i := int64(0); i < portionSize; i++ {
+				for p := 0; p < portionCount; p++ {
+					nextIndex := roundStartIndex + int64(portionOrder[p])*portionSize + i
+					bValue += b[nextIndex]
 				}
 			}
 		}
@@ -257,14 +260,14 @@ func allocateBArray(bSize int64) {
 	if bReaderCount > 0 {
 		ba.readers = 1
 		bReaderCount--
-		go bExerciser(exerciserCount, true, false, ba, bReadOffset, bReadSize, bReadInterval, bReadPortion, bReadOffsetDelta, bReadSizeDelta)
+		go bExerciser(exerciserCount, true, false, ba, bReadOffset, bReadSize, bReadInterval, bReadPortions, bReadOffsetDelta, bReadSizeDelta)
 		exerciserCount += 1
 	}
 	// create writers
 	if bWriterCount > 0 {
 		ba.writers = 1
 		bWriterCount--
-		go bExerciser(exerciserCount, false, true, ba, bWriteOffset, bWriteSize, bWriteInterval, bWritePortion, bWriteOffsetDelta, bWriteSizeDelta)
+		go bExerciser(exerciserCount, false, true, ba, bWriteOffset, bWriteSize, bWriteInterval, bWritePortions, bWriteOffsetDelta, bWriteSizeDelta)
 		exerciserCount += 1
 	}
 }
@@ -301,8 +304,8 @@ func main() {
 	optBWriteOffsetDelta := flag.String("bwod", "0k", "offset change on each iteration")
 	optBReadInterval := flag.String("bri", "0", "read interval on each byte array, T(ns|us|ms|s|m|h)")
 	optBWriteInterval := flag.String("bwi", "0", "write interval on each byte array")
-	optBReadPortion := flag.Int64("brp", 1, "number of portions split the size of read")
-	optBWritePortion := flag.Int64("bwp", 1, "number of portions split the size of write")
+	optBReadPortions := flag.String("brp", "1", "number of portions split the size of read")
+	optBWritePortions := flag.String("bwp", "1", "number of portions split the size of write")
 	flag.Parse()
 
 	bSize := numBytes("-bs", *optBSize)
@@ -313,7 +316,7 @@ func main() {
 	bReadOffset = numBytes("-bro", *optBReadOffset)
 	bReadOffsetDelta = numBytes("-brod", *optBReadOffsetDelta)
 	bReadInterval = numNs("-bri", *optBReadInterval)
-	bReadPortion = *optBReadPortion
+	bReadPortions = int(numBytes("-brp", *optBReadPortions))
 
 	bWriterCount = *optBWriterCount
 	bWriteSize = numBytes("-bws", *optBWriteSize)
@@ -321,7 +324,7 @@ func main() {
 	bWriteOffset = numBytes("-bwo", *optBWriteOffset)
 	bWriteOffsetDelta = numBytes("-bwod", *optBWriteOffsetDelta)
 	bWriteInterval = numNs("-bwi", *optBWriteInterval)
-	bWritePortion = *optBWritePortion
+	bWritePortions = int(numBytes("-bwp", *optBWritePortions))
 
 	perfPrintInterval = numNs("-p", *optPerfPrintInterval)
 
