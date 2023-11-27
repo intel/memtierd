@@ -1,7 +1,7 @@
 # Make sure the system has DAMON support enabled.
 vm-command "[ -d /sys/kernel/mm/damon ]" || {
-    damon-idlepage-setup
-    vm-command "[ -d /sys/kernel/mm/damon ]" || error "failed to setup damon"
+  kernel-configure-damon-idlepage
+  vm-command "[ -d /sys/kernel/mm/damon ]" || error "failed to setup damon"
 }
 
 memtierd-setup
@@ -47,3 +47,5 @@ policy:
 "
 memtierd-start
 memtierd-stop
+
+# Todo: extend the e2e tests with kernel-patch-setup $kernel_version $patch_file
