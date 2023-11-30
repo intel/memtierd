@@ -225,7 +225,7 @@ func (pp *Pages) NodePageCount() map[Node]uint {
 func (pp *Pages) Nodes() []Node {
 	nodePageCount := pp.NodePageCount()
 	nodes := make([]Node, len(nodePageCount))
-	for node, _ := range nodePageCount {
+	for node := range nodePageCount {
 		nodes = append(nodes, node)
 	}
 	return nodes

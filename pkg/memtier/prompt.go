@@ -72,18 +72,18 @@ func NewPrompt(ps1 string, reader *bufio.Reader, writer *bufio.Writer) *Prompt {
 		mover: NewMover(),
 	}
 	p.cmds = map[string]Cmd{
-		"q":          Cmd{"quit interactive prompt.", p.cmdQuit},
-		"pidwatcher": Cmd{"manage pidwatcher, track processes.", p.cmdPidWatcher},
-		"tracker":    Cmd{"manage tracker, track memory accesses.", p.cmdTracker},
-		"stats":      Cmd{"print statistics.", p.cmdStats},
-		"swap":       Cmd{"swap in/out, print swapped pages.", p.cmdSwap},
-		"pages":      Cmd{"select pages, print selected page nodes and flags.", p.cmdPages},
-		"arange":     Cmd{"select/split/filter address ranges.", p.cmdArange},
-		"mover":      Cmd{"manage mover, move selected pages.", p.cmdMover},
-		"policy":     Cmd{"manage policy, start/stop memory tiering.", p.cmdPolicy},
-		"routines":   Cmd{"manage routines.", p.cmdRoutines},
-		"help":       Cmd{"print help.", p.cmdHelp},
-		"nop":        Cmd{"no operation.", p.cmdNop},
+		"q":          {"quit interactive prompt.", p.cmdQuit},
+		"pidwatcher": {"manage pidwatcher, track processes.", p.cmdPidWatcher},
+		"tracker":    {"manage tracker, track memory accesses.", p.cmdTracker},
+		"stats":      {"print statistics.", p.cmdStats},
+		"swap":       {"swap in/out, print swapped pages.", p.cmdSwap},
+		"pages":      {"select pages, print selected page nodes and flags.", p.cmdPages},
+		"arange":     {"select/split/filter address ranges.", p.cmdArange},
+		"mover":      {"manage mover, move selected pages.", p.cmdMover},
+		"policy":     {"manage policy, start/stop memory tiering.", p.cmdPolicy},
+		"routines":   {"manage routines.", p.cmdRoutines},
+		"help":       {"print help.", p.cmdHelp},
+		"nop":        {"no operation.", p.cmdNop},
 	}
 	return &p
 }

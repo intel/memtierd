@@ -223,7 +223,7 @@ func (t *TrackerIdlePage) sampler() {
 		case <-ticker.C:
 			currentNs := time.Now().UnixNano()
 			if time.Duration(currentNs-lastRegionsUpdateNs) >= time.Duration(t.config.RegionsUpdateMs)*time.Millisecond {
-				for pid, _ := range t.regions {
+				for pid := range t.regions {
 					t.addRanges(pid)
 				}
 				lastRegionsUpdateNs = currentNs

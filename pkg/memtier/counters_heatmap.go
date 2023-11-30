@@ -170,7 +170,7 @@ func (h *Heatmap) UpdateFromCounters(tcs *TrackerCounters, timestamp int64) {
 		trackedPids[tc.AR.Pid()] = setMember
 		h.updateFromCounter(&tc, timestamp)
 	}
-	for pid, _ := range h.pidHrs {
+	for pid := range h.pidHrs {
 		if _, ok := trackedPids[pid]; !ok {
 			delete(h.pidHrs, pid)
 		}
