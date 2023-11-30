@@ -1,0 +1,51 @@
+name: Main
+
+on:
+  pull_request: {}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+
+    - name: Go pkgs check
+      run: make vet
+
+    - name: Build meme and memtierd
+      run: |
+        make bin/memtierd
+        make bin/meme
+
+    - name: Unit test
+      run: make race=1 test
+
+    - name: Fuzz test
+      run: make race=1 fuzztest
+
+    - name: Install dependencies for static checks
+      run: |
+        go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        go install -v github.com/fzipp/gocyclo/cmd/gocyclo@latest
+
+    - name: Format check
+      run: make format
+
+    #- name: Lint check
+    #  run: make lint
+
+    #- name: Shell check
+    #  run: make shellcheck
+
+    #- name: Golangci lint check
+    #  run: make golangci-lint
+
+    #- name: Cyclomatic check
+    #  run: make cyclomatic-check
