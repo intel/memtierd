@@ -241,9 +241,9 @@ func TestSorted(t *testing.T) {
 		NewAddrData(0x1c000, 3, "h"),
 	}
 	for i := range sorted {
-		if (expected[i].Addr() != sorted[i].Addr() ||
+		if expected[i].Addr() != sorted[i].Addr() ||
 			expected[i].EndAddr() != sorted[i].EndAddr() ||
-			expected[i].data.(string) != sorted[i].data.(string)) {
+			expected[i].data.(string) != sorted[i].data.(string) {
 			t.Errorf("expected[%d] == %v, got sorted[%d] == %v", i, expected[i], i, sorted[i])
 		}
 		ad := sorted[i]

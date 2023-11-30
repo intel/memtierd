@@ -65,10 +65,10 @@ func (a *AddrDatas) Data(addr uint64) (interface{}, bool) {
 }
 
 // ForEach iterates over addrdatas.
-// - handler(*AddrRange, data) is called for every entry
-//   in the ascending start address order. Handler return values:
-//       0 (continue): ForEach continues iteration from the next element
-//       -1 (break):   ForEach returns immediately.
+//   - handler(*AddrRange, data) is called for every entry
+//     in the ascending start address order. Handler return values:
+//     0 (continue): ForEach continues iteration from the next element
+//     -1 (break):   ForEach returns immediately.
 func (a *AddrDatas) ForEach(handler func(*AddrRange, interface{}) int) {
 	for _, ad := range a.ads {
 		next := handler(&ad.AddrRange, ad.data)

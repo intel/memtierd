@@ -231,7 +231,7 @@ func (p *PolicyAge) Dump(args []string) string {
 				// include "all" pids, too.
 				pids = append(pids, 0)
 			}
-			for pid, _ := range *p.palt {
+			for pid := range *p.palt {
 				pids = append(pids, pid)
 			}
 		}
