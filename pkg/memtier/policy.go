@@ -19,14 +19,16 @@ import (
 	"sort"
 )
 
+// PolicyConfig represents the configuration for a policy.
 type PolicyConfig struct {
 	Name   string
 	Config string
 }
 
+// Policy interface defines the methods that a memory management policy should implement.
 type Policy interface {
-	SetConfigJson(string) error // Set new configuration.
-	GetConfigJson() string      // Get current configuration.
+	SetConfigJSON(string) error // Set new configuration.
+	GetConfigJSON() string      // Get current configuration.
 	Start() error
 	Stop()
 	// PidWatcher, Mover and Tracker are mostly for debugging in interactive prompt...
@@ -36,15 +38,18 @@ type Policy interface {
 	Dump(args []string) string
 }
 
+// PolicyCreator is a function that creates an instance of a Policy.
 type PolicyCreator func() (Policy, error)
 
 // policies is a map of policy name -> policy creator
 var policies map[string]PolicyCreator = make(map[string]PolicyCreator, 0)
 
+// PolicyRegister registers a new policy with its creator function.
 func PolicyRegister(name string, creator PolicyCreator) {
 	policies[name] = creator
 }
 
+// PolicyList returns a sorted list of available policy names.
 func PolicyList() []string {
 	keys := make([]string, 0, len(policies))
 	for key := range policies {
@@ -54,6 +59,7 @@ func PolicyList() []string {
 	return keys
 }
 
+// NewPolicy creates a new instance of a policy based on its name.
 func NewPolicy(name string) (Policy, error) {
 	if creator, ok := policies[name]; ok {
 		return creator()

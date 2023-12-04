@@ -23,6 +23,7 @@ import (
 	"time"
 )
 
+// RoutineStatActionsConfig holds the configuration for the StatActions routine.
 type RoutineStatActionsConfig struct {
 	// IntervalMs is the length of the period in milliseconds in
 	// which StatActions routine checks process_statactions call
@@ -48,6 +49,7 @@ type RoutineStatActionsConfig struct {
 	PageOutCommandRunner string
 }
 
+// RoutineStatActions represents the StatActions routine.
 type RoutineStatActions struct {
 	config           *RoutineStatActionsConfig
 	lastPageOutPages uint64
@@ -70,6 +72,7 @@ func init() {
 	RoutineRegister("statactions", NewRoutineStatActions)
 }
 
+// NewRoutineStatActions creates a new instance of RoutineStatActions.
 func NewRoutineStatActions() (Routine, error) {
 	r := &RoutineStatActions{}
 	commandRunners = map[string]commandRunnerFunc{
@@ -81,9 +84,10 @@ func NewRoutineStatActions() (Routine, error) {
 	return r, nil
 }
 
-func (r *RoutineStatActions) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration for the StatActions routine from a JSON string.
+func (r *RoutineStatActions) SetConfigJSON(configJSON string) error {
 	config := &RoutineStatActionsConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	if config.IntervalMs <= 0 {
@@ -97,7 +101,8 @@ func (r *RoutineStatActions) SetConfigJson(configJson string) error {
 	return nil
 }
 
-func (r *RoutineStatActions) GetConfigJson() string {
+// GetConfigJSON returns the configuration of the StatActions routine as a JSON string.
+func (r *RoutineStatActions) GetConfigJSON() string {
 	if r.config == nil {
 		return ""
 	}
@@ -107,11 +112,13 @@ func (r *RoutineStatActions) GetConfigJson() string {
 	return ""
 }
 
+// SetPolicy sets the policy for the StatActions routine.
 func (r *RoutineStatActions) SetPolicy(policy Policy) error {
 	r.policy = policy
 	return nil
 }
 
+// Start starts the StatActions routine.
 func (r *RoutineStatActions) Start() error {
 	if r.config == nil {
 		return fmt.Errorf("cannot start without configuration")
@@ -124,6 +131,7 @@ func (r *RoutineStatActions) Start() error {
 	return nil
 }
 
+// Stop stops the StatActions routine.
 func (r *RoutineStatActions) Stop() {
 	if r.cgLoop != nil {
 		log.Debugf("Stopping statactions routine")
@@ -133,6 +141,7 @@ func (r *RoutineStatActions) Stop() {
 	}
 }
 
+// Dump returns a string representation of the StatActions routine's status.
 func (r *RoutineStatActions) Dump(args []string) string {
 	return fmt.Sprintf("routine \"statactions\": running=%v", r.cgLoop != nil)
 }

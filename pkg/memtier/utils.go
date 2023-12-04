@@ -67,16 +67,6 @@ func sliceContainsInt(haystack []int, needle int) bool {
 	return false
 }
 
-func sortedCopyOfInts(orig []int) []int {
-	return sortInts(copyInts(orig))
-}
-
-func copyInts(orig []int) []int {
-	retval := make([]int, len(orig))
-	copy(retval, orig)
-	return retval
-}
-
 func sortInts(orig []int) []int {
 	sort.Ints(orig)
 	return orig

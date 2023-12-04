@@ -1,4 +1,4 @@
-// Copyright 2021 Intel Corporation. All Rights Reserved.
+// Copyright 2023 Intel Corporation. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// Configuration for ratio policy, among which
+// PolicyRatioConfig represents the configuration for ratio policy, among which
 // Ratio means the the portion of the least recently used memory, which
 // should be swapped out when RatioTargets is missing or [-1], or moved to
 // the target nodes according to RatioTargets
@@ -35,6 +35,8 @@ type PolicyRatioConfig struct {
 	Pids         []int            // DEPRECATED, use PidWatcher "pid" instead
 }
 
+// PolicyRatio is the main struct for the ratio policy, implementing the policy interface.
+// the configuration, pid watchers, mover, pid and the addressc ranges, and so on, are included.
 type PolicyRatio struct {
 	config     *PolicyRatioConfig
 	pidwatcher PidWatcher
@@ -58,6 +60,7 @@ func init() {
 	PolicyRegister("ratio", NewPolicyRatio)
 }
 
+// NewPolicyRatio creates a new instance of PolicyRatio.
 func NewPolicyRatio() (Policy, error) {
 	p := &PolicyRatio{
 		mover: NewMover(),
@@ -65,16 +68,16 @@ func NewPolicyRatio() (Policy, error) {
 	return p, nil
 }
 
-// SetConfigJson() sets the policy configuration
-func (p *PolicyRatio) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the policy configuration.
+func (p *PolicyRatio) SetConfigJSON(configJSON string) error {
 	config := &PolicyRatioConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	return p.SetConfig(config)
 }
 
-// SetConfig() checks the validity of the configuration and sets the policy configuration
+// SetConfig checks the validity of the configuration and sets the policy configuration.
 func (p *PolicyRatio) SetConfig(config *PolicyRatioConfig) error {
 	// check "IntervalMs" configuration for ratio policy
 	// optional field, defaults to 5 seconds if missing
@@ -101,7 +104,7 @@ func (p *PolicyRatio) SetConfig(config *PolicyRatioConfig) error {
 	if err != nil {
 		return err
 	}
-	if err = newPidWatcher.SetConfigJson(config.PidWatcher.Config); err != nil {
+	if err = newPidWatcher.SetConfigJSON(config.PidWatcher.Config); err != nil {
 		return fmt.Errorf("configuring pidwatcher %q for the ratio policy failed: %w", config.PidWatcher.Name, err)
 	}
 	p.pidwatcher = newPidWatcher
@@ -130,7 +133,7 @@ func (p *PolicyRatio) SetConfig(config *PolicyRatioConfig) error {
 		return err
 	}
 	if config.Tracker.Config != "" {
-		if err = newTracker.SetConfigJson(config.Tracker.Config); err != nil {
+		if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
 			return fmt.Errorf("configuring tracker %q for the ratio policy failed: %s", config.Tracker.Name, err)
 		}
 	}
@@ -146,14 +149,14 @@ func (p *PolicyRatio) SetConfig(config *PolicyRatioConfig) error {
 	return nil
 }
 
-// GetConfigJson() gets the policy configuration
-func (p *PolicyRatio) GetConfigJson() string {
+// GetConfigJSON gets the policy configuration.
+func (p *PolicyRatio) GetConfigJSON() string {
 	if p.config == nil {
 		return ""
 	}
 	pconfig := *p.config
 	if p.tracker != nil {
-		pconfig.Tracker.Config = p.tracker.GetConfigJson()
+		pconfig.Tracker.Config = p.tracker.GetConfigJSON()
 	}
 	if configStr, err := json.Marshal(&pconfig); err == nil {
 		return string(configStr)
@@ -161,7 +164,7 @@ func (p *PolicyRatio) GetConfigJson() string {
 	return ""
 }
 
-// switchToTracker() stops the current tracker and initiates a new tracker
+// switchToTracker stops the current tracker and initiates a new tracker.
 func (p *PolicyRatio) switchToTracker(newTracker Tracker) {
 	if p.tracker != nil {
 		p.tracker.Stop()
@@ -169,27 +172,27 @@ func (p *PolicyRatio) switchToTracker(newTracker Tracker) {
 	p.tracker = newTracker
 }
 
-// PidWatcher() returns pidwatcher for ratio policy
+// PidWatcher returns pidwatcher for ratio policy.
 func (p *PolicyRatio) PidWatcher() PidWatcher {
 	return p.pidwatcher
 }
 
-// Mover() returns mover for ratio policy
+// Mover returns mover for ratio policy.
 func (p *PolicyRatio) Mover() *Mover {
 	return p.mover
 }
 
-// Tracker() returns tracker for ratio policy
+// Tracker returns tracker for ratio policy.
 func (p *PolicyRatio) Tracker() Tracker {
 	return p.tracker
 }
 
-// Todo
+// Dump is not implemented for ratio policy yet.
 func (p *PolicyRatio) Dump(args []string) string {
 	return ""
 }
 
-// Stop() stops ratio policy
+// Stop stops ratio policy.
 func (p *PolicyRatio) Stop() {
 	if p.pidwatcher != nil {
 		p.pidwatcher.Stop()
@@ -205,7 +208,7 @@ func (p *PolicyRatio) Stop() {
 	}
 }
 
-// Start() starts ratio policy with given policy configuration
+// Start starts ratio policy with given policy configuration.
 func (p *PolicyRatio) Start() error {
 	if p.cgLoop != nil {
 		return fmt.Errorf("already started")
@@ -228,7 +231,7 @@ func (p *PolicyRatio) Start() error {
 	return nil
 }
 
-// move() moves the pages recorded in counters to the destNode
+// move moves the pages recorded in counters to the destNode.
 func (p *PolicyRatio) move(tcs *TrackerCounters, destNode Node) {
 	if p.mover.TaskCount() == 0 {
 		for _, tc := range *tcs {
@@ -245,8 +248,8 @@ func (p *PolicyRatio) move(tcs *TrackerCounters, destNode Node) {
 	}
 }
 
-// getBytesInTargetNuma() returns how many bytes which is not located on the original node(s),
-// this function will be called when moving memory among numa nodes
+// getBytesInTargetNuma returns how many bytes which is not located on the original node(s),
+// this function will be called when moving memory among numa nodes.
 func (p *PolicyRatio) getBytesInTargetNuma(pid int) (uint64, error) {
 	// Obtain all the memory address ranges for the given pid
 	process := NewProcess(pid)
@@ -274,8 +277,8 @@ func (p *PolicyRatio) getBytesInTargetNuma(pid int) (uint64, error) {
 	return uint64(len(pp.pages)) * constUPagesize, nil
 }
 
-// getBytesInSwap() returns the how many bytes which have been swapped out,
-// this function will be called when swapping in and out memory
+// getBytesInSwap returns the how many bytes which have been swapped out,
+// this function will be called when swapping in and out memory.
 func (p *PolicyRatio) getBytesInSwap(pid int) (uint64, error) {
 	// Obtain all the memory address ranges for the given pid
 	process := NewProcess(pid)
@@ -315,8 +318,8 @@ func (p *PolicyRatio) getBytesInSwap(pid int) (uint64, error) {
 	return swapped * constUPagesize, nil
 }
 
-// getRatioCounters() returns the counters recording the info of the corresponding pages
-// which are the portion based on the ratio configuration of the least active
+// getRatioCounters returns the counters recording the info of the corresponding pages
+// which are the portion based on the ratio configuration of the least active.
 func (p *PolicyRatio) getRatioCounters(timestamp int64, Ratio float32) *TrackerCounters {
 	tcsMap := map[int]*TrackerCounters{}
 	memSizeBytes := map[int]uint64{}
@@ -349,7 +352,7 @@ func (p *PolicyRatio) getRatioCounters(timestamp int64, Ratio float32) *TrackerC
 		tcs.SortByAccesses()
 		idleTcs := &TrackerCounters{}
 
-		if p.config.RatioTargets[0] == int(NODE_SWAP) {
+		if p.config.RatioTargets[0] == int(NodeSwap) {
 			var err error
 			moveSizeBytes, err = p.getBytesInSwap(pid)
 			if err != nil {
@@ -382,9 +385,9 @@ func (p *PolicyRatio) getRatioCounters(timestamp int64, Ratio float32) *TrackerC
 	return tcsList
 }
 
-// updateCounter() updates the LastSeen, LastChanged and LastRounds of the counters
-// if the pid stored in the counter is found in pidAddrLenTcRatio, otherwise fill in the counter accordingly
-// which is called in the loop() every IntervalMs
+// updateCounter updates the LastSeen, LastChanged and LastRounds of the counters,
+// if the pid stored in the counter is found in pidAddrLenTcRatio, otherwise fill in the counter accordingly,
+// which is called in the loop() every IntervalMs.
 func (p *PolicyRatio) updateCounter(tc *TrackerCounter, timestamp int64) {
 	pid := tc.AR.Pid()
 	addr := tc.AR.Ranges()[0].Addr()
@@ -425,8 +428,8 @@ func (p *PolicyRatio) updateCounter(tc *TrackerCounter, timestamp int64) {
 	}
 }
 
-// deleteDeadCounters() deletes the counters which has the LastSeen at least happened 2*IntervalMs earlier
-// or empty counters, this function is called in the loop() every IntervalMs
+// deleteDeadCounters deletes the counters which has the LastSeen at least happened 2*IntervalMs earlier
+// or empty counters, this function is called in the loop() every IntervalMs.
 func (p *PolicyRatio) deleteDeadCounters(timestamp int64) {
 	aliveThreshold := timestamp - int64(2*time.Duration(p.config.IntervalMs)*time.Millisecond)
 	for pid, alt := range *p.palt {
@@ -446,9 +449,9 @@ func (p *PolicyRatio) deleteDeadCounters(timestamp int64) {
 	}
 }
 
-// loop() will keep updating the counters from the tracker, and calculating the memory which is needed
+// loop will keep updating the counters from the tracker, and calculating the memory which is needed
 // to be swapped out or moved to the target numa nodes according the Ratio and ratioTargets settings
-// before memtierd stops the current ratio policy every IntervalMs
+// before memtierd stops the current ratio policy every IntervalMs.
 func (p *PolicyRatio) loop() {
 	log.Debugf("PolicyRatio: online\n")
 	log.Debugf("Ratio config ratio: %v, targets: %v, interval: %v \n", p.config.Ratio, p.config.RatioTargets, p.config.IntervalMs)
@@ -489,7 +492,7 @@ func (p *PolicyRatio) loop() {
 		if len(p.config.RatioTargets) > 0 {
 			p.move(idleTcs, Node(p.config.RatioTargets[0]))
 		} else {
-			p.move(idleTcs, NODE_SWAP)
+			p.move(idleTcs, NodeSwap)
 		}
 
 		n++           // for debugging

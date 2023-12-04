@@ -21,7 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -29,11 +29,13 @@ import (
 	"sync"
 )
 
+// Cmd represents a command with a description and a function to execute.
 type Cmd struct {
 	description string
 	Run         func([]string) CommandStatus
 }
 
+// Prompt represents an interactive prompt with associated functionality.
 type Prompt struct {
 	r            *bufio.Reader
 	w            *bufio.Writer
@@ -54,6 +56,7 @@ type Prompt struct {
 	outputMutex  sync.Mutex
 }
 
+// CommandStatus represents the status of a command execution.
 type CommandStatus int
 
 const (
@@ -64,6 +67,7 @@ const (
 	csError
 )
 
+// NewPrompt creates a new interactive prompt with the given prompt string and I/O readers/writers.
 func NewPrompt(ps1 string, reader *bufio.Reader, writer *bufio.Writer) *Prompt {
 	p := Prompt{
 		r:     reader,
@@ -98,6 +102,7 @@ func (p *Prompt) output(format string, a ...interface{}) {
 	p.w.Flush()
 }
 
+// RunCmdSlice executes a command specified by a slice of strings.
 func (p *Prompt) RunCmdSlice(cmdSlice []string) CommandStatus {
 	if len(cmdSlice) == 0 {
 		return csOk
@@ -117,6 +122,7 @@ func (p *Prompt) RunCmdSlice(cmdSlice []string) CommandStatus {
 	return cmd.Run(cmdSlice[1:])
 }
 
+// RunCmdString executes a command specified by a string.
 func (p *Prompt) RunCmdString(cmdString string) CommandStatus {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -167,6 +173,7 @@ func (p *Prompt) RunCmdString(cmdString string) CommandStatus {
 	return runRv
 }
 
+// Interact starts the interactive prompt loop.
 func (p *Prompt) Interact() {
 	p.quit = false
 	for !p.quit {
@@ -184,10 +191,12 @@ func (p *Prompt) Interact() {
 	p.output("quit.\n")
 }
 
+// SetEcho sets the echo mode for the prompt.
 func (p *Prompt) SetEcho(newEcho bool) {
 	p.echo = newEcho
 }
 
+// SetPolicy sets the policy for the prompt.
 func (p *Prompt) SetPolicy(policy Policy) {
 	p.policy = policy
 	p.mover = p.policy.Mover()
@@ -195,6 +204,7 @@ func (p *Prompt) SetPolicy(policy Policy) {
 	p.pidwatcher = p.policy.PidWatcher()
 }
 
+// SetRoutines sets the routines for the prompt.
 func (p *Prompt) SetRoutines(routines []Routine) {
 	p.routines = routines
 }
@@ -348,7 +358,7 @@ func (p *Prompt) cmdSwap(args []string) CommandStatus {
 		vaddrEnd := uint64(0)
 		pmFile.ForEachPage(ar.Ranges(), 0,
 			func(pmBits, pageAddr uint64) int {
-				pages += 1
+				pages++
 				if (pmBits>>PMB_SWAP)&1 == 0 {
 					if vaddrStart > 0 && *vaddrs {
 						p.output("%s\n", NewAddrRange(vaddrStart, vaddrEnd))
@@ -356,7 +366,7 @@ func (p *Prompt) cmdSwap(args []string) CommandStatus {
 					vaddrStart = 0
 					return 0
 				}
-				swapped += 1
+				swapped++
 				vaddrEnd = pageAddr + constUPagesize
 				if vaddrStart == 0 {
 					vaddrStart = pageAddr
@@ -549,7 +559,7 @@ PGTABLE       %d
 					(pmBits>>PMB_SWAP)&1,
 					(pmBits>>PMB_PRESENT)&1,
 					pmBits&PM_PFN)
-				printed += 1
+				printed++
 				if printed >= *pm {
 					return -1
 				}
@@ -599,12 +609,12 @@ func (p *Prompt) cmdMover(args []string) CommandStatus {
 		return csOk
 	}
 	if *config != "" {
-		if err := p.mover.SetConfigJson(*config); err != nil {
+		if err := p.mover.SetConfigJSON(*config); err != nil {
 			p.output("mover reconfiguration error: %v\n", err)
 		}
 	}
 	if *configDump {
-		p.output("%s\n", p.mover.GetConfigJson())
+		p.output("%s\n", p.mover.GetConfigJSON())
 	}
 	if *pagesTo >= 0 {
 		err := p.mover.Start()
@@ -633,8 +643,8 @@ func (p *Prompt) cmdMover(args []string) CommandStatus {
 		p.mover.Continue()
 	}
 	if *tasks {
-		for taskId, task := range p.mover.Tasks() {
-			p.output("%-8d %s\n", taskId, task)
+		for taskID, task := range p.mover.Tasks() {
+			p.output("%-8d %s\n", taskID, task)
 		}
 	}
 	if *removeTask != -1 {
@@ -711,14 +721,14 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 		return csOk
 	}
 	if *config != "" {
-		if err := p.pidwatcher.SetConfigJson(*config); err != nil {
+		if err := p.pidwatcher.SetConfigJSON(*config); err != nil {
 			p.output("pidwatcher configuration error: %v\n", err)
 		} else {
 			p.output("pidwatcher configured successfully\n")
 		}
 	}
 	if *configDump {
-		p.output("%s\n", p.pidwatcher.GetConfigJson())
+		p.output("%s\n", p.pidwatcher.GetConfigJSON())
 	}
 	if *listener != "" {
 		switch *listener {
@@ -744,10 +754,14 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 	return csOk
 }
 
+// AddPids adds the specified process IDs (pids) to the Prompt's watch list.
+// It prints a log message indicating the added PIDs.
 func (p *Prompt) AddPids(pids []int) {
 	p.output("pidwatcher: AddPids(%v)", pids)
 }
 
+// RemovePids removes the specified process IDs (pids) from the Prompt's watch list.
+// It prints a log message indicating the removed PIDs.
 func (p *Prompt) RemovePids(pids []int) {
 	p.output("pidwatcher: RemovePids(%v)", pids)
 }
@@ -787,7 +801,7 @@ func (p *Prompt) cmdTracker(args []string) CommandStatus {
 		return csOk
 	}
 	if *config != "" {
-		if err := p.tracker.SetConfigJson(*config); err != nil {
+		if err := p.tracker.SetConfigJSON(*config); err != nil {
 			p.output("tracker configuration error: %v\n", err)
 		} else {
 			p.output("tracker configured successfully\n")
@@ -814,7 +828,7 @@ func (p *Prompt) cmdTracker(args []string) CommandStatus {
 		p.output("tracker started\n")
 	}
 	if *configDump {
-		p.output("%s\n", p.tracker.GetConfigJson())
+		p.output("%s\n", p.tracker.GetConfigJSON())
 	}
 	if *counters {
 		tcs := p.tracker.GetCounters()
@@ -877,19 +891,19 @@ func (p *Prompt) cmdPolicy(args []string) CommandStatus {
 		return csOk
 	}
 	if *configFile != "" {
-		configJson, err := ioutil.ReadFile(*configFile)
+		configJSON, err := os.ReadFile(*configFile)
 		if err != nil {
 			p.output("reading file %q failed: %s", *configFile, err)
 			return csOk
 		}
-		err = p.policy.SetConfigJson(string(configJson))
+		err = p.policy.SetConfigJSON(string(configJSON))
 		if err != nil {
 			p.output("config failed: %s\n", err)
 			return csOk
 		}
 	}
 	if *config != "" {
-		err := p.policy.SetConfigJson(*config)
+		err := p.policy.SetConfigJSON(*config)
 		if err != nil {
 			p.output("config failed: %s\n", err)
 			return csOk
@@ -904,7 +918,7 @@ func (p *Prompt) cmdPolicy(args []string) CommandStatus {
 		}
 	}
 	if *configDump {
-		p.output("%s\n", p.policy.GetConfigJson())
+		p.output("%s\n", p.policy.GetConfigJSON())
 	}
 	if *stop {
 		p.policy.Stop()
@@ -957,19 +971,19 @@ func (p *Prompt) cmdRoutines(args []string) CommandStatus {
 		p.routineInUse = *use
 	}
 	if *configFile != "" {
-		configJson, err := ioutil.ReadFile(*configFile)
+		configJSON, err := os.ReadFile(*configFile)
 		if err != nil {
 			p.output("reading file %q failed: %s\n", *configFile, err)
 			return csOk
 		}
-		err = p.routines[p.routineInUse].SetConfigJson(string(configJson))
+		err = p.routines[p.routineInUse].SetConfigJSON(string(configJSON))
 		if err != nil {
 			p.output("config failed: %s\n", err)
 			return csOk
 		}
 	}
 	if *config != "" {
-		err := p.routines[p.routineInUse].SetConfigJson(*config)
+		err := p.routines[p.routineInUse].SetConfigJSON(*config)
 		if err != nil {
 			p.output("config failed: %s\n", err)
 			return csOk
@@ -983,7 +997,7 @@ func (p *Prompt) cmdRoutines(args []string) CommandStatus {
 		}
 	}
 	if *configDump {
-		p.output("%s\n", p.routines[p.routineInUse].GetConfigJson())
+		p.output("%s\n", p.routines[p.routineInUse].GetConfigJSON())
 	}
 	if *stop {
 		p.routines[p.routineInUse].Stop()

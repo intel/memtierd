@@ -30,6 +30,7 @@ import (
 	"time"
 )
 
+// TrackerDamonConfig holds configuration parameters for connecting to DAMON.
 type TrackerDamonConfig struct {
 	// Connection specifies how to connect to the damon. "perf"
 	// connects by tracing damon:aggregated using perf. Options
@@ -80,6 +81,7 @@ const (
 	trackerDamonSysfsKdamonds int    = 32
 )
 
+// DamonUserspaceInterface represents the interface for DAMON interactions.
 type DamonUserspaceInterface interface {
 	// ApplyAttrs (re)configures DAMON with TrackerDamonConfig parameters.
 	ApplyAttrs(config *TrackerDamonConfig) error
@@ -88,7 +90,7 @@ type DamonUserspaceInterface interface {
 	// ApplyState switches DAMON state on/off.
 	ApplyState(value string) error
 	// AggregatedPid returns the PID of the tracked workload on an aggregation line.
-	AggregatedPid(kdamondPid int, targetId uint64) int
+	AggregatedPid(kdamondPid int, targetID uint64) int
 	KdamondPids() []int
 }
 
@@ -99,7 +101,7 @@ type damonDebugfs struct {
 type kdamondInfo struct {
 	id          int
 	state       string
-	targetIdPid []int
+	targetIDPid []int
 	targetsPath string
 	statePath   string
 	pidPath     string
@@ -112,12 +114,13 @@ type damonSysfs struct {
 	kdamonds     []*kdamondInfo
 	// // kdamondIndexPids: index in the kdamondsList (not in the system) -> pids of tracked worloads
 	// kdamondIndexPids [][]int
-	// kdamondPid -> targetId -> pid of tracked workload
-	kdamondPidTargetIdPid map[int][]int
+	// kdamondPid -> targetID -> pid of tracked workload
+	kdamondPidTargetIDPid map[int][]int
 	regionsManager        int
 	isRunning             bool
 }
 
+// TrackerDamon represents the main DAMON tracker structure.
 type TrackerDamon struct {
 	mutex             sync.Mutex
 	config            *TrackerDamonConfig
@@ -139,6 +142,7 @@ func init() {
 	TrackerRegister("damon", NewTrackerDamon)
 }
 
+// NewTrackerDamon creates a new TrackerDamon instance.
 func NewTrackerDamon() (Tracker, error) {
 	t := TrackerDamon{
 		ifaceAvailDebugfs: procFileExists(trackerDamonDebugfsPath),
@@ -157,10 +161,11 @@ func NewTrackerDamon() (Tracker, error) {
 	return &t, nil
 }
 
-func (t *TrackerDamon) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the DAMON configuration from a JSON string.
+func (t *TrackerDamon) SetConfigJSON(configJSON string) error {
 	config := &TrackerDamonConfig{}
-	if configJson != "" {
-		if err := unmarshal(configJson, config); err != nil {
+	if configJSON != "" {
+		if err := unmarshal(configJSON, config); err != nil {
 			return err
 		}
 	}
@@ -200,7 +205,8 @@ func (t *TrackerDamon) SetConfigJson(configJson string) error {
 	return nil
 }
 
-func (t *TrackerDamon) GetConfigJson() string {
+// GetConfigJSON returns the DAMON configuration as a JSON string.
+func (t *TrackerDamon) GetConfigJSON() string {
 	if t.config == nil {
 		return ""
 	}
@@ -210,13 +216,12 @@ func (t *TrackerDamon) GetConfigJson() string {
 	return ""
 }
 
+// AddPids adds process IDs to be tracked by DAMON.
 func (t *TrackerDamon) AddPids(pids []int) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	log.Debugf("TrackerDamon.AddPids(%v)\n", pids)
-	for _, pid := range pids {
-		t.pids = append(t.pids, pid)
-	}
+	t.pids = append(t.pids, pids...)
 	if t.started {
 		t.iface.ApplyState("off")
 		t.applyPids()
@@ -225,6 +230,7 @@ func (t *TrackerDamon) AddPids(pids []int) {
 	}
 }
 
+// RemovePids removes process IDs from being tracked by DAMON.
 func (t *TrackerDamon) RemovePids(pids []int) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -270,6 +276,9 @@ func (t *TrackerDamon) applyPids() error {
 	return t.iface.ApplyTargetIds(t.pids)
 }
 
+// ApplyAttrs applies the attributes of the given TrackerDamonConfig to a file
+// specified by the trackerDamonDebugfsPath+"/attrs". It converts the attributes
+// to a space-separated string and writes them to the file.
 func (debugfs *damonDebugfs) ApplyAttrs(config *TrackerDamonConfig) error {
 	utoa := func(u uint64) string { return strconv.FormatUint(u, 10) }
 	configStr := utoa(config.SamplingUs) +
@@ -283,6 +292,8 @@ func (debugfs *damonDebugfs) ApplyAttrs(config *TrackerDamonConfig) error {
 	return nil
 }
 
+// ApplyTargetIds updates the list of process IDs (pids) to be monitored
+// by writing them to the target_ids file in the debugfs path.
 func (debugfs *damonDebugfs) ApplyTargetIds(pids []int) error {
 	// Refresh all pids to be monitored.
 	// Writing a non-existing pids to target_ids causes an error.
@@ -300,6 +311,9 @@ func (debugfs *damonDebugfs) ApplyTargetIds(pids []int) error {
 	return nil
 }
 
+// ApplyState updates the monitoring state by writing a new value to the monitor_on file
+// in the debugfs path. It checks if the current status is already the desired value
+// before performing the write operation to avoid unnecessary writes.
 func (debugfs *damonDebugfs) ApplyState(value string) error {
 	monitorFilename := trackerDamonDebugfsPath + "/monitor_on"
 	currentStatus, err := procRead(monitorFilename)
@@ -322,13 +336,19 @@ func (debugfs *damonDebugfs) ApplyState(value string) error {
 	return nil
 }
 
-func (debugfs *damonDebugfs) AggregatedPid(kdamondPid int, targetId uint64) int {
-	if targetId < uint64(len(debugfs.appliedPids)) {
-		return debugfs.appliedPids[targetId]
+// AggregatedPid returns the corresponding monitored process ID (pid) for a given
+// target ID. If the target ID is out of bounds, it returns 0.
+func (debugfs *damonDebugfs) AggregatedPid(kdamondPid int, targetID uint64) int {
+	if targetID < uint64(len(debugfs.appliedPids)) {
+		return debugfs.appliedPids[targetID]
 	}
 	return 0
 }
 
+// KdamondPids reads the kdamond_pid file in the debugfs path to retrieve
+// the kdamond process ID (kpid). If the read operation fails or the kpid is
+// 0, it logs an error and returns an empty slice. Otherwise, it returns a
+// slice containing the kpid.
 func (debugfs *damonDebugfs) KdamondPids() []int {
 	pathKdamondPid := trackerDamonDebugfsPath + "/kdamond_pid"
 	kpid, err := procReadInt(pathKdamondPid)
@@ -380,18 +400,18 @@ func (sysfs *damonSysfs) initialize(config *TrackerDamonConfig) error {
 	sysfs.nrKdamonds = globalNrKdamonds
 	if len(config.KdamondsList) > 0 {
 		// Take control over all kdamonds that have been listed for this damon tracker
-		for _, kdamondId := range config.KdamondsList {
-			if kdamondId >= sysfs.nrKdamonds {
-				return fmt.Errorf("illegal kdamond %d in DAMON tracker configuration KdamondsList: last available kdamond in system is %d", kdamondId, sysfs.nrKdamonds-1)
+		for _, kdamondID := range config.KdamondsList {
+			if kdamondID >= sysfs.nrKdamonds {
+				return fmt.Errorf("illegal kdamond %d in DAMON tracker configuration KdamondsList: last available kdamond in system is %d", kdamondID, sysfs.nrKdamonds-1)
 			}
-			contextsPath := fmt.Sprintf("%s/%d/contexts", trackerDamonSysfsPath, kdamondId)
-			nrContextsPath := fmt.Sprintf("%s/%d/contexts/nr_contexts", trackerDamonSysfsPath, kdamondId)
-			targetsPath := fmt.Sprintf("%s/%d/contexts/0/targets", trackerDamonSysfsPath, kdamondId)
-			statePath := fmt.Sprintf("%s/%d/state", trackerDamonSysfsPath, kdamondId)
-			pidPath := fmt.Sprintf("%s/%d/pid", trackerDamonSysfsPath, kdamondId)
-			attrsPath := fmt.Sprintf("%s/%d/contexts/0/monitoring_attrs", trackerDamonSysfsPath, kdamondId)
+			contextsPath := fmt.Sprintf("%s/%d/contexts", trackerDamonSysfsPath, kdamondID)
+			nrContextsPath := fmt.Sprintf("%s/%d/contexts/nr_contexts", trackerDamonSysfsPath, kdamondID)
+			targetsPath := fmt.Sprintf("%s/%d/contexts/0/targets", trackerDamonSysfsPath, kdamondID)
+			statePath := fmt.Sprintf("%s/%d/state", trackerDamonSysfsPath, kdamondID)
+			pidPath := fmt.Sprintf("%s/%d/pid", trackerDamonSysfsPath, kdamondID)
+			attrsPath := fmt.Sprintf("%s/%d/contexts/0/monitoring_attrs", trackerDamonSysfsPath, kdamondID)
 			if currState, err := procReadTrimmed(statePath); currState != "off" && err == nil {
-				log.Warnf("taking control over kdamond %d despite %q was %q", kdamondId, statePath, currState)
+				log.Warnf("taking control over kdamond %d despite %q was %q", kdamondID, statePath, currState)
 				if err = procWrite(statePath, []byte("off")); err != nil {
 					return fmt.Errorf("failed to switch off %q", statePath)
 				}
@@ -403,13 +423,13 @@ func (sysfs *damonSysfs) initialize(config *TrackerDamonConfig) error {
 				return fmt.Errorf("kdamond context operation \"vaddr\" failed: %w", err)
 			}
 			sysfs.kdamonds = append(sysfs.kdamonds, &kdamondInfo{
-				id:          kdamondId,
+				id:          kdamondID,
 				targetsPath: targetsPath,
 				statePath:   statePath,
 				pidPath:     pidPath,
 				attrsPath:   attrsPath,
 			})
-			sysfs.kdamondsList = append(sysfs.kdamondsList, kdamondId)
+			sysfs.kdamondsList = append(sysfs.kdamondsList, kdamondID)
 		}
 	} else {
 		return fmt.Errorf("missing DAMON configuration kdamondslist")
@@ -417,6 +437,9 @@ func (sysfs *damonSysfs) initialize(config *TrackerDamonConfig) error {
 	return nil
 }
 
+// ApplyAttrs applies the attributes of the given TrackerDamonConfig to the
+// corresponding attributes files for each kdamond in the sysfs instance.
+// If there are no kdamonds, it initializes the sysfs instance first.
 func (sysfs *damonSysfs) ApplyAttrs(config *TrackerDamonConfig) error {
 	if sysfs.nrKdamonds == 0 {
 		if err := sysfs.initialize(config); err != nil {
@@ -441,6 +464,9 @@ func (sysfs *damonSysfs) ApplyAttrs(config *TrackerDamonConfig) error {
 	return nil
 }
 
+// ApplyTargetIds applies the given list of process IDs (pids) to the corresponding
+// kdamonds in the sysfs instance. It updates the target IDs, writes the number
+// of targets and their address ranges to the sysfs files for each kdamond.
 func (sysfs *damonSysfs) ApplyTargetIds(pids []int) error {
 	/* TODO: optimize, small changes in pids could be limited to
 	   only some kdamonds, thus some of them could be kept running
@@ -458,19 +484,19 @@ func (sysfs *damonSysfs) ApplyTargetIds(pids []int) error {
 	log.Debugf("damonSysfs.ApplyTargetIds(%v): kdamondIndexPids=%v", pids, kdamondIndexPids)
 	for kdamondIndex, kdamond := range sysfs.kdamonds {
 		log.Debugf("damonSysfs.ApplyTargetIds: writing targets to kdamondIndex=%d kdamond=%+v", kdamondIndex, kdamond)
-		kdamond.targetIdPid = kdamondIndexPids[kdamondIndex]
+		kdamond.targetIDPid = kdamondIndexPids[kdamondIndex]
 		nrTargetsPath := filepath.Join(kdamond.targetsPath, "nr_targets")
-		nrTargets := len(kdamond.targetIdPid)
+		nrTargets := len(kdamond.targetIDPid)
 		if err := procWriteInt(nrTargetsPath, nrTargets); err != nil {
 			return fmt.Errorf("failed to write pid count %d to %q: %w", nrTargets, nrTargetsPath, err)
 		}
-		for targetId, pid := range kdamond.targetIdPid {
+		for targetID, pid := range kdamond.targetIDPid {
 			addrRanges, err := procMaps(pid)
 			if err != nil || len(addrRanges) == 0 {
 				// pid is gone or it has no interesting address ranges
 				return fmt.Errorf("failed to read address ranges of pid %d: %w", pid, err)
 			}
-			pidTargetPath := filepath.Join(kdamond.targetsPath, strconv.Itoa(targetId), "pid_target")
+			pidTargetPath := filepath.Join(kdamond.targetsPath, strconv.Itoa(targetID), "pid_target")
 			if err := procWriteInt(pidTargetPath, pid); err != nil {
 				return fmt.Errorf("failed to write pid %d to %q: %w", pid, pidTargetPath, err)
 			}
@@ -479,14 +505,14 @@ func (sysfs *damonSysfs) ApplyTargetIds(pids []int) error {
 				// Skip the rest of the loop that would write targets/TID/regions/*.
 				continue
 			}
-			regionsPath := filepath.Join(kdamond.targetsPath, strconv.Itoa(targetId), "regions")
+			regionsPath := filepath.Join(kdamond.targetsPath, strconv.Itoa(targetID), "regions")
 			nrRegionsPath := filepath.Join(regionsPath, "nr_regions")
 			if err := procWriteInt(nrRegionsPath, len(addrRanges)); err != nil {
 				return fmt.Errorf("failed to write address range count %d to %q: %w", len(addrRanges), nrRegionsPath, err)
 			}
-			for regionId, ar := range addrRanges {
-				startPath := filepath.Join(regionsPath, strconv.Itoa(regionId), "start")
-				endPath := filepath.Join(regionsPath, strconv.Itoa(regionId), "end")
+			for regionID, ar := range addrRanges {
+				startPath := filepath.Join(regionsPath, strconv.Itoa(regionID), "start")
+				endPath := filepath.Join(regionsPath, strconv.Itoa(regionID), "end")
 				if err := procWriteUint64(startPath, ar.Addr()); err != nil {
 					return fmt.Errorf("failed to write region start address %d (%x) of pid %d to %q: %w", ar.Addr(), ar.Addr(), pid, startPath, err)
 				}
@@ -499,10 +525,12 @@ func (sysfs *damonSysfs) ApplyTargetIds(pids []int) error {
 	return nil
 }
 
+// ApplyState applies the given state value to the kdamond processes in the sysfs instance.
+// It writes the state to each kdamond's state file and updates the sysfs and kdamond states.
 func (sysfs *damonSysfs) ApplyState(value string) error {
 	for _, kdamond := range sysfs.kdamonds {
 		if value != kdamond.state &&
-			((value == "on" && len(kdamond.targetIdPid) > 0) ||
+			((value == "on" && len(kdamond.targetIDPid) > 0) ||
 				(value != "on")) {
 			// Writing "off" to state causes an error if kdamond was already off.
 			// Ignore that error, but not others.
@@ -522,7 +550,7 @@ func (sysfs *damonSysfs) ApplyState(value string) error {
 		// in order to map aggregation tracepoint information
 		// (kdamond pid and target id) to the pid of the
 		// workload.
-		sysfs.kdamondPidTargetIdPid = map[int][]int{}
+		sysfs.kdamondPidTargetIDPid = map[int][]int{}
 		for _, kdamond := range sysfs.kdamonds {
 			kdamondPid, err := procReadInt(kdamond.pidPath)
 			if err != nil {
@@ -531,7 +559,7 @@ func (sysfs *damonSysfs) ApplyState(value string) error {
 			}
 			log.Debugf("damonSysfs.ApplyState(\"on\"): %q: %d", kdamond.pidPath, kdamondPid)
 			if kdamondPid > 0 {
-				sysfs.kdamondPidTargetIdPid[kdamondPid] = kdamond.targetIdPid
+				sysfs.kdamondPidTargetIDPid[kdamondPid] = kdamond.targetIDPid
 			}
 		}
 	default: // other states do not affect isRunning
@@ -539,22 +567,27 @@ func (sysfs *damonSysfs) ApplyState(value string) error {
 	return nil
 }
 
-func (sysfs *damonSysfs) AggregatedPid(kdamondPid int, targetId uint64) int {
-	if targetIdPid, ok := sysfs.kdamondPidTargetIdPid[kdamondPid]; ok {
-		if targetId < uint64(len(targetIdPid)) {
-			return targetIdPid[targetId]
+// AggregatedPid retrieves the aggregated process ID (pid) for a given kdamondPid
+// and targetID from the sysfs instance. It uses the kdamondPidTargetIDPid mapping
+// to find the corresponding aggregated pid.
+func (sysfs *damonSysfs) AggregatedPid(kdamondPid int, targetID uint64) int {
+	if targetIDPid, ok := sysfs.kdamondPidTargetIDPid[kdamondPid]; ok {
+		if targetID < uint64(len(targetIDPid)) {
+			return targetIDPid[targetID]
 		}
-		stats.Store(StatsHeartbeat{"TrackerDamon.sysfs.AggregatedPid: unknown targetId"})
+		stats.Store(StatsHeartbeat{"TrackerDamon.sysfs.AggregatedPid: unknown targetID"})
 	} else {
 		stats.Store(StatsHeartbeat{"TrackerDamon.sysfs.AggregatedPid: unknown kdamond pid"})
 	}
 	return 0
 }
 
+// KdamondPids retrieves a slice containing all kdamond process IDs (kpids)
+// from the sysfs instance using the kdamondPidTargetIDPid mapping.
 func (sysfs *damonSysfs) KdamondPids() []int {
-	kpids := make([]int, len(sysfs.kdamondPidTargetIdPid))
+	kpids := make([]int, len(sysfs.kdamondPidTargetIDPid))
 	i := 0
-	for kdamondPid := range sysfs.kdamondPidTargetIdPid {
+	for kdamondPid := range sysfs.kdamondPidTargetIDPid {
 		kpids[i] = kdamondPid
 		i++
 	}
@@ -586,12 +619,13 @@ func (t *TrackerDamon) updateKdamondConnection() error {
 	return nil
 }
 
+// Start starts the DAMON tracker.
 func (t *TrackerDamon) Start() error {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	// Reset configuration.
 	if t.config == nil {
-		if err := t.SetConfigJson(""); err != nil {
+		if err := t.SetConfigJSON(""); err != nil {
 			return fmt.Errorf("start failed on default configuration error: %w", err)
 		}
 	}
@@ -619,6 +653,7 @@ func (t *TrackerDamon) Start() error {
 	return nil
 }
 
+// Stop stops the DAMON tracker.
 func (t *TrackerDamon) Stop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -637,6 +672,7 @@ func (t *TrackerDamon) Stop() {
 	}
 }
 
+// ResetCounters resets the DAMON counters.
 func (t *TrackerDamon) ResetCounters() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -647,6 +683,9 @@ func (t *TrackerDamon) ResetCounters() {
 	t.lostEvents = 0
 }
 
+// GetCounters returns a new TrackerCounters instance containing counters for tracked accesses.
+// It uses the current state of the TrackerDamon and aggregates access counts based on process ID, start address, and length.
+// The function acquires a lock on the TrackerDamon's mutex to ensure safe access to shared data.
 func (t *TrackerDamon) GetCounters() *TrackerCounters {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -686,19 +725,19 @@ func (t *TrackerDamon) bpftraceParser(bpftraceOutput *bufio.Reader) {
 	//         field:unsigned long end;        offset:32;      size:8; signed:0;
 	//         field:unsigned int nr_accesses; offset:40;      size:4; signed:0;
 	//         field:unsigned int age; offset:44;      size:4; signed:0;
-	var targetId uint64
+	var targetID uint64
 	var start, end uint64
 	var nrAccesses, age uint
 	var kdamondPid int
-	for true {
-		_, err := fmt.Fscanf(bpftraceOutput, "%d %d %x %x %d %d\n", &kdamondPid, &targetId, &start, &end, &nrAccesses, &age)
+	for {
+		_, err := fmt.Fscanf(bpftraceOutput, "%d %d %x %x %d %d\n", &kdamondPid, &targetID, &start, &end, &nrAccesses, &age)
 		if err != nil {
 			log.Debugf("TrackerDamon.bpftraceParser: unexpected output error: %s", err)
 			stats.Store(StatsHeartbeat{fmt.Sprintf("TrackerDamon.bpftraceParser.error: %s", err)})
 			break
 		}
 		stats.Store(StatsHeartbeat{"TrackerDamon.bpftraceParser.line"})
-		pid := t.iface.AggregatedPid(kdamondPid, targetId)
+		pid := t.iface.AggregatedPid(kdamondPid, targetID)
 		t.storeAggregated(pid, start, end, nrAccesses, age)
 	}
 	log.Debugf("TrackerDamon.bpftraceParser: exit")
@@ -818,7 +857,7 @@ func (t *TrackerDamon) perfReader() error {
 	}
 	perfLines := make(chan string, 1024)
 	go func() {
-		for true {
+		for {
 			line, err := perfOutput.ReadString('\n')
 			if err != nil || line == "" {
 				break
@@ -856,25 +895,25 @@ func (t *TrackerDamon) perfReader() error {
 	return nil
 }
 
-// legacyTargetIdToPid is an opportunistic and unreliable way of
-// trying to guess the pid of the workload from targetId reported by
+// legacyTargetIDToPid is an opportunistic and unreliable way of
+// trying to guess the pid of the workload from targetID reported by
 // old versions of DAMON (before Linux 5.17).
-func (t *TrackerDamon) legacyTargetIdToPid(targetId int64, start uint64, end uint64, targetIdIsPidIndex bool) int {
-	// If targetId is already mapped to pid, return it.
-	if pid, ok := t.tidpid[targetId]; ok {
+func (t *TrackerDamon) legacyTargetIDToPid(targetID int64, start uint64, end uint64, targetIDIsPidIndex bool) int {
+	// If targetID is already mapped to pid, return it.
+	if pid, ok := t.tidpid[targetID]; ok {
 		return pid
 	}
 
 	if len(t.pids) == 1 {
-		t.tidpid[targetId] = t.pids[0]
-		return t.tidpid[targetId]
+		t.tidpid[targetID] = t.pids[0]
+		return t.tidpid[targetID]
 	}
 
-	if targetIdIsPidIndex && targetId > 0 && targetId < int64(len(t.pids)) {
-		return t.pids[targetId]
+	if targetIDIsPidIndex && targetID > 0 && targetID < int64(len(t.pids)) {
+		return t.pids[targetID]
 	}
 
-	// Unseen targetId. Read address ranges of all current
+	// Unseen targetID. Read address ranges of all current
 	// processes. If we would go through only address ranges we
 	// have seen sometime earlier, we might end up trusting only
 	// matching address range yet that would belong to a wrong
@@ -890,14 +929,14 @@ func (t *TrackerDamon) legacyTargetIdToPid(targetId int64, start uint64, end uin
 		for _, ar := range arlist {
 			if start >= ar.addr && end < ar.addr+ar.length*constUPagesize {
 				matchingPid = pid
-				matchingPids += 1
+				matchingPids++
 				break
 			}
 		}
 	}
 	if matchingPids == 1 {
-		log.Debugf("TrackerDamon: associating tid=%d with pid=%d\n", targetId, matchingPid)
-		t.tidpid[targetId] = matchingPid
+		log.Debugf("TrackerDamon: associating tid=%d with pid=%d\n", targetID, matchingPid)
+		t.tidpid[targetID] = matchingPid
 		return matchingPid
 	}
 	return 0
@@ -987,14 +1026,14 @@ func (t *TrackerDamon) perfHandleLine(line string) error {
 		stats.Store(StatsHeartbeat{"TrackerDamon.perfHandleLine: parse error: target_id not found"})
 		return fmt.Errorf("target_id not found from %q line %q", csLine[3], line)
 	}
-	targetIdStr := csLine[4]
+	targetIDStr := csLine[4]
 	startStr := csLine[7]
 	endStr := csLine[8]
 	nrStr := csLine[9]
-	targetId, err := strconv.ParseUint(targetIdStr, 10, 64)
+	targetID, err := strconv.ParseUint(targetIDStr, 10, 64)
 	if err != nil {
 		stats.Store(StatsHeartbeat{"TrackerDamon.perfHandleLine: parse error: target_id syntax error"})
-		return fmt.Errorf("parse error (%w) on targetIdStr %q line %q", err, targetIdStr, line)
+		return fmt.Errorf("parse error (%w) on targetIDStr %q line %q", err, targetIDStr, line)
 	}
 	start, err := strconv.ParseUint(startStr, 10, 64)
 	if err != nil {
@@ -1018,9 +1057,9 @@ func (t *TrackerDamon) perfHandleLine(line string) error {
 	pid := 0
 	if len(csLine) > 10 {
 		// Linux 5.17+: target_id is an index in to the pids in the target_id's file.
-		pid = t.iface.AggregatedPid(0, targetId)
+		pid = t.iface.AggregatedPid(0, targetID)
 	} else {
-		pid = t.legacyTargetIdToPid(int64(targetId), start, end, false)
+		pid = t.legacyTargetIDToPid(int64(targetID), start, end, false)
 	}
 	if pid < 1 {
 		stats.Store(StatsHeartbeat{"TrackerDamon.perfHandleLine:unknown target id"})
@@ -1032,6 +1071,9 @@ func (t *TrackerDamon) perfHandleLine(line string) error {
 	return nil
 }
 
+// Dump generates a dump based on the provided arguments. It supports
+// different dump types, such as "raw". The method delegates the actual
+// dump generation to the appropriate sub-method based on the dump type.
 func (t *TrackerDamon) Dump(args []string) string {
 	usage := "Usage: dump raw PARAMS"
 	if len(args) == 0 {
@@ -1044,7 +1086,7 @@ func (t *TrackerDamon) Dump(args []string) string {
 }
 
 /*
-tracking a pid with damo / debug output:
+tracking a pid with damon / debug output:
 
 write '0' to '/sys/kernel/mm/damon/admin/kdamonds/nr_kdamonds'
 read '/sys/kernel/mm/damon/admin/kdamonds/nr_kdamonds': '0'

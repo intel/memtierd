@@ -14,6 +14,7 @@
 
 package memtier
 
+// TrackerStub defines empty struct for the scenarios without tracker configured.
 type TrackerStub struct {
 }
 
@@ -21,38 +22,48 @@ func init() {
 	TrackerRegister("stub", NewTrackerStub)
 }
 
+// NewTrackerStub creates a new instance of TrackerStub with default configuration.
 func NewTrackerStub() (Tracker, error) {
 	return &TrackerStub{}, nil
 }
 
-func (t *TrackerStub) SetConfigJson(configJson string) error {
+// SetConfigJSON is a method of TrackerStub, returns nil.
+func (t *TrackerStub) SetConfigJSON(configJSON string) error {
 	return nil
 }
 
-func (t *TrackerStub) GetConfigJson() string {
+// GetConfigJSON is a method of TrackerStub, returns "".
+func (t *TrackerStub) GetConfigJSON() string {
 	return ""
 }
 
+// AddPids is a method of TrackerStub that doing nothing here.
 func (t *TrackerStub) AddPids(pids []int) {
 }
 
+// RemovePids is a method of TrackerStub that doing nothing here.
 func (t *TrackerStub) RemovePids(pids []int) {
 }
 
+// Start is a method of TrackerStub, returns nil.
 func (t *TrackerStub) Start() error {
 	return nil
 }
 
+// Stop is a method of TrackerStub that doing nothing here.
 func (t *TrackerStub) Stop() {
 }
 
+// ResetCounters is a method of TrackerStub that doing nothing here.
 func (t *TrackerStub) ResetCounters() {
 }
 
+// GetCounters is a method of TrackerStub, returns nil.
 func (t *TrackerStub) GetCounters() *TrackerCounters {
 	return nil
 }
 
+// Dump is a method of TrackerStub, returns "".
 func (t *TrackerStub) Dump([]string) string {
 	return ""
 }

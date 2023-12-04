@@ -296,7 +296,7 @@ func TestUpdateCountersOverlappingRanges(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			hm := NewCounterHeatmap()
 			if tc.config != "" {
-				hm.SetConfigJson(tc.config)
+				hm.SetConfigJSON(tc.config)
 			}
 			timestamp := int64(tc.origT)
 			hm.UpdateFromCounters(&tc.orig, timestamp)

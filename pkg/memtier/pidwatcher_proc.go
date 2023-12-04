@@ -25,10 +25,12 @@ import (
 	"time"
 )
 
+// PidWatcherProcConfig holds the configuration for PidWatcherProc.
 type PidWatcherProcConfig struct {
 	IntervalMs int // poll interval
 }
 
+// PidWatcherProc is an implementation of PidWatcher that watches for new processes under /proc.
 type PidWatcherProc struct {
 	config       *PidWatcherProcConfig
 	pidsReported map[int]setMemberType
@@ -41,19 +43,22 @@ func init() {
 	PidWatcherRegister("proc", NewPidWatcherProc)
 }
 
+// NewPidWatcherProc creates a new instance of PidWatcherProc with default configuration.
 func NewPidWatcherProc() (PidWatcher, error) {
 	w := &PidWatcherProc{
 		pidsReported: map[int]setMemberType{},
 	}
 	// This pidwatcher is expected to work out-of-the-box without
 	// any configuration. Set the defaults immediately.
-	w.SetConfigJson("")
+	w.SetConfigJSON("")
 	return w, nil
 }
 
-func (w *PidWatcherProc) SetConfigJson(configJson string) error {
+// SetConfigJSON is a method of PidWatcherProc that sets the configuration from JSON.
+// It unmarshals the input JSON string into the PidWatcherProcConfig structure.
+func (w *PidWatcherProc) SetConfigJSON(configJSON string) error {
 	config := &PidWatcherProcConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	if config.IntervalMs == 0 {
@@ -63,7 +68,8 @@ func (w *PidWatcherProc) SetConfigJson(configJson string) error {
 	return nil
 }
 
-func (w *PidWatcherProc) GetConfigJson() string {
+// GetConfigJSON is a method of PidWatcherProc that returns the current configuration as a JSON string.
+func (w *PidWatcherProc) GetConfigJSON() string {
 	if w.config == nil {
 		return ""
 	}
@@ -73,10 +79,13 @@ func (w *PidWatcherProc) GetConfigJson() string {
 	return ""
 }
 
+// SetPidListener is a method of PidWatcherProc that sets the PidListener.
 func (w *PidWatcherProc) SetPidListener(l PidListener) {
 	w.pidListener = l
 }
 
+// Poll is a method of PidWatcherProc that triggers the polling process.
+// It locks the mutex, starts the polling loop, and unlocks the mutex.
 func (w *PidWatcherProc) Poll() error {
 	w.mutex.Lock()
 	w.stop = false
@@ -85,6 +94,8 @@ func (w *PidWatcherProc) Poll() error {
 	return nil
 }
 
+// Start is a method of PidWatcherProc that starts the polling process in a goroutine.
+// It locks the mutex, starts the polling loop in a separate goroutine, and unlocks the mutex.
 func (w *PidWatcherProc) Start() error {
 	w.mutex.Lock()
 	w.stop = false
@@ -93,12 +104,14 @@ func (w *PidWatcherProc) Start() error {
 	return nil
 }
 
+// Stop is a method of PidWatcherProc that stops the polling process by setting the stop flag.
 func (w *PidWatcherProc) Stop() {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	w.stop = true
 }
 
+// Dump is a method of PidWatcherProc that returns a string representation of the current instance.
 func (w *PidWatcherProc) Dump([]string) string {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
@@ -106,6 +119,8 @@ func (w *PidWatcherProc) Dump([]string) string {
 		w.config, w.pidsReported, w.pidListener, w.stop)
 }
 
+// loop is a helper function of PidWatcherProc that performs the actual polling.
+// It continuously looks for new processes under /proc and reports changes to the PidListener.
 func (w *PidWatcherProc) loop(singleshot bool) {
 	log.Debugf("PidWatcherProc: online\n")
 	defer log.Debugf("PidWatcherProc: offline\n")

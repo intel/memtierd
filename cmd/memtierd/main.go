@@ -18,7 +18,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -29,7 +28,7 @@ import (
 	_ "github.com/intel/memtierd/pkg/version"
 )
 
-type Config struct {
+type config struct {
 	Policy   memtier.PolicyConfig
 	Routines []memtier.RoutineConfig
 }
@@ -40,11 +39,11 @@ func exit(format string, a ...interface{}) {
 }
 
 func loadConfigFile(filename string) (memtier.Policy, []memtier.Routine) {
-	configBytes, err := ioutil.ReadFile(filename)
+	configBytes, err := os.ReadFile(filename)
 	if err != nil {
 		exit("%s", err)
 	}
-	var config Config
+	var config config
 	err = yaml.Unmarshal(configBytes, &config)
 	if err != nil {
 		exit("error in %q: %s", filename, err)
@@ -55,7 +54,7 @@ func loadConfigFile(filename string) (memtier.Policy, []memtier.Routine) {
 		exit("%s", err)
 	}
 
-	err = policy.SetConfigJson(config.Policy.Config)
+	err = policy.SetConfigJSON(config.Policy.Config)
 	if err != nil {
 		exit("%s", err)
 	}
@@ -66,7 +65,7 @@ func loadConfigFile(filename string) (memtier.Policy, []memtier.Routine) {
 		if err != nil {
 			exit("%s", err)
 		}
-		err = routine.SetConfigJson(routineCfg.Config)
+		err = routine.SetConfigJSON(routineCfg.Config)
 		if err != nil {
 			exit("routine %s: %s", routineCfg.Name, err)
 		}
@@ -79,7 +78,7 @@ func main() {
 	memtier.SetLogger(log.New(os.Stderr, "", 0))
 	optPrompt := flag.Bool("prompt", false, "launch interactive prompt (ignore other parameters)")
 	optConfig := flag.String("config", "", "launch non-interactive mode with config file")
-	optConfigDumpJson := flag.Bool("config-dump-json", false, "dump effective configuration in JSON")
+	optConfigDumpJSON := flag.Bool("config-dump-json", false, "dump effective configuration in JSON")
 	optDebug := flag.Bool("debug", false, "print debug output")
 	optCommandString := flag.String("c", "-", "run command string, \"-\": from stdin (the default), \"\": non-interactive")
 
@@ -100,8 +99,8 @@ func main() {
 		exit("missing -prompt or -config")
 	}
 
-	if *optConfigDumpJson {
-		fmt.Printf("%s\n", policy.GetConfigJson())
+	if *optConfigDumpJSON {
+		fmt.Printf("%s\n", policy.GetConfigJSON())
 		os.Exit(0)
 	}
 

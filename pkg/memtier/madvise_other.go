@@ -19,6 +19,8 @@ package memtier
 
 import "syscall"
 
+// ProcessMadviseSyscall is a placeholder function for systems other than Linux where the process_madvise system call is not supported.
+// It panics with a message indicating that the function is not implemented on this platform.
 func ProcessMadviseSyscall(pidfd int, ranges []AddrRange, advise int, flags uint) (int, syscall.Errno, error) {
 	panic("ProcessMadviseSyscall not implemented on this platform")
 }

@@ -225,9 +225,11 @@ cyclomatic-check:
 	    exit 1; \
 	fi
 
+# Exclude golint check for proc.go and consts.go as they contains variables from
+# Linux kernel code, which might violate the golang variables' naming rules
 lint:
 	$(Q)rc=0; \
-	for f in $$(find -name \*.go | grep -v \.\/vendor); do \
+	for f in $$(find -name \*.go ! -name proc.go ! -name consts.go | grep -v \.\/vendor); do \
 	    $(GO_LINT) -set_exit_status $$f || rc=1; \
 	done; \
 	exit $$rc

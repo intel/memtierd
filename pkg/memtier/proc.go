@@ -18,7 +18,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -132,7 +131,7 @@ func procFileExists(path string) bool {
 }
 
 func procWrite(path string, data []byte) error {
-	return ioutil.WriteFile(path, data, 0600)
+	return os.WriteFile(path, data, 0600)
 }
 
 func procWriteInt(path string, i int) error {
@@ -144,7 +143,7 @@ func procWriteUint64(path string, i uint64) error {
 }
 
 func procRead(path string) (string, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
@@ -160,7 +159,7 @@ func procReadTrimmed(path string) (string, error) {
 }
 
 func procReadInt(path string) (int, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
 	}
@@ -500,7 +499,7 @@ func procMaps(pid int) ([]AddrRange, error) {
 
 	// Read /proc/pid/numa_maps
 	numaMapsPath := "/proc/" + sPid + "/numa_maps"
-	numaMapsBytes, err := ioutil.ReadFile(numaMapsPath)
+	numaMapsBytes, err := os.ReadFile(numaMapsPath)
 	if err != nil {
 		return nil, err
 	}
@@ -508,7 +507,7 @@ func procMaps(pid int) ([]AddrRange, error) {
 
 	// Read /proc/pid/maps
 	mapsPath := "/proc/" + sPid + "/maps"
-	mapsBytes, err := ioutil.ReadFile(mapsPath)
+	mapsBytes, err := os.ReadFile(mapsPath)
 	if err != nil {
 		return nil, err
 	}

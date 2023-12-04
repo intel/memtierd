@@ -22,16 +22,19 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// AddrRanges is a struct that holds a process ID and a collection of memory address ranges.
 type AddrRanges struct {
 	pid   int
 	addrs []AddrRange
 }
 
+// AddrRange represents a memory address range with a start address and length.
 type AddrRange struct {
 	addr   uint64
 	length uint64
 }
 
+// NewAddrRangeFromString converts a string representation to an AddrRange.
 func NewAddrRangeFromString(s string) (*AddrRange, error) {
 	// Syntax:
 	// STARTADDR[-ENDADDR]
@@ -76,6 +79,7 @@ func NewAddrRangeFromString(s string) (*AddrRange, error) {
 	return NewAddrRange(startAddr, endAddr), nil
 }
 
+// NewAddrRange creates a new AddrRange with given startAddr and stopAddr.
 func NewAddrRange(startAddr, stopAddr uint64) *AddrRange {
 	if stopAddr < startAddr {
 		startAddr, stopAddr = stopAddr, startAddr
@@ -83,45 +87,52 @@ func NewAddrRange(startAddr, stopAddr uint64) *AddrRange {
 	return &AddrRange{addr: startAddr, length: (stopAddr - startAddr) / constUPagesize}
 }
 
+// String returns a string representation of AddrRange.
 func (r AddrRange) String() string {
 	return fmt.Sprintf("%x-%x (%d B)", r.addr, r.addr+(r.length*constUPagesize), r.length*constUPagesize)
 }
 
+// Addr returns the start address from AddrRange.
 func (r *AddrRange) Addr() uint64 {
 	return r.addr
 }
 
+// EndAddr returns the end address from AddrRange.
 func (r *AddrRange) EndAddr() uint64 {
 	return r.addr + r.length*constUPagesize
 }
 
+// Length returns the length of AddrRange.
 func (r *AddrRange) Length() uint64 {
 	return r.length
 }
 
+// Equals returns true if the given AddrRange is the same as the current AddrRange.
 func (r *AddrRange) Equals(other *AddrRange) bool {
 	return r.addr == other.addr && r.length == other.length
 }
 
+// NewAddrRanges creates an AddrRanges instance with a given process ID and address ranges.
 func NewAddrRanges(pid int, arParams ...AddrRange) *AddrRanges {
 	ar := &AddrRanges{
 		pid:   pid,
 		addrs: make([]AddrRange, 0, len(arParams)),
 	}
-	for _, r := range arParams {
-		ar.addrs = append(ar.addrs, r)
-	}
+	ar.addrs = append(ar.addrs, arParams...)
 	return ar
 }
 
+// Pid returns the process ID from AddrRanges.
 func (ar *AddrRanges) Pid() int {
 	return ar.pid
 }
 
+// Ranges returns all the AddrRanges from AddrRanges.
 func (ar *AddrRanges) Ranges() []AddrRange {
 	return ar.addrs
 }
 
+// String returns a string representation of AddrRanges.
 func (ar *AddrRanges) String() string {
 	rs := []string{}
 	for _, r := range ar.addrs {
@@ -132,7 +143,7 @@ func (ar *AddrRanges) String() string {
 	return s
 }
 
-// Flatten returns AddrRanges where each item includes only one address range
+// Flatten returns AddrRanges where each item includes only one address range.
 func (ar *AddrRanges) Flatten() []*AddrRanges {
 	rv := []*AddrRanges{}
 	for _, r := range ar.addrs {
@@ -145,6 +156,7 @@ func (ar *AddrRanges) Flatten() []*AddrRanges {
 	return rv
 }
 
+// Filter returns a new AddrRanges instance with only the address ranges that meet a specified condition.
 func (ar *AddrRanges) Filter(accept func(ar AddrRange) bool) *AddrRanges {
 	newAr := &AddrRanges{
 		pid:   ar.pid,
@@ -158,6 +170,7 @@ func (ar *AddrRanges) Filter(accept func(ar AddrRange) bool) *AddrRanges {
 	return newAr
 }
 
+// SplitLength divides address ranges in AddrRanges to fit a maximum length.
 func (ar *AddrRanges) SplitLength(maxLength uint64) *AddrRanges {
 	newAr := &AddrRanges{
 		pid:   ar.pid,
@@ -178,10 +191,12 @@ func (ar *AddrRanges) SplitLength(maxLength uint64) *AddrRanges {
 	return newAr
 }
 
+// SwapOut performs memory management operation on the given address ranges using madvise.
 func (ar *AddrRanges) SwapOut() error {
 	return ar.ProcessMadvise(unix.MADV_PAGEOUT)
 }
 
+// ProcessMadvise performs madvise operation on the given address ranges.
 func (ar *AddrRanges) ProcessMadvise(advise int) error {
 	pidfd, err := PidfdOpenSyscall(ar.Pid(), 0)
 	if pidfd < 0 || err != nil {
@@ -205,6 +220,7 @@ func (ar *AddrRanges) ProcessMadvise(advise int) error {
 	return nil
 }
 
+// PageCount calculates the total number of pages in the address ranges.
 func (ar *AddrRanges) PageCount() uint64 {
 	pageCount := uint64(0)
 	for _, r := range ar.Ranges() {
@@ -236,6 +252,7 @@ func (ar *AddrRanges) PagesMatching(pageAttributes uint64) (*Pages, error) {
 	return pp, nil
 }
 
+// Intersection modifies AddrRanges by keeping only the overlapping parts with another set of address ranges.
 func (ar *AddrRanges) Intersection(intRanges []AddrRange) {
 	newAddrs := []AddrRange{}
 	for _, oldRange := range ar.addrs {
@@ -260,6 +277,7 @@ func (ar *AddrRanges) Intersection(intRanges []AddrRange) {
 	ar.addrs = newAddrs
 }
 
+// parseMemBytes converts a string representation of memory size to bytes.
 func parseMemBytes(s string) (int64, error) {
 	factor := int64(1)
 	// Syntax: INT[PREFIX[i][B]]

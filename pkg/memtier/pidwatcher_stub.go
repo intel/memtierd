@@ -14,6 +14,7 @@
 
 package memtier
 
+// PidWatcherStub defines empty struct for the scenarios without PidWatcher configured.
 type PidWatcherStub struct {
 }
 
@@ -21,32 +22,40 @@ func init() {
 	PidWatcherRegister("stub", NewPidWatcherStub)
 }
 
+// NewPidWatcherStub creates a new instance of PidWatcherStub with default configuration.
 func NewPidWatcherStub() (PidWatcher, error) {
 	return &PidWatcherStub{}, nil
 }
 
-func (w *PidWatcherStub) SetConfigJson(configJson string) error {
+// SetConfigJSON is a method of PidWatcherStub, returns nil.
+func (w *PidWatcherStub) SetConfigJSON(configJSON string) error {
 	return nil
 }
 
-func (w *PidWatcherStub) GetConfigJson() string {
+// GetConfigJSON is a method of PidWatcherStub, returns "".
+func (w *PidWatcherStub) GetConfigJSON() string {
 	return ""
 }
 
+// SetPidListener is a method of PidWatcherStub that doing nothing here.
 func (w *PidWatcherStub) SetPidListener(PidListener) {
 }
 
+// Poll is a method of PidWatcherStub that doing nothing here.
 func (w *PidWatcherStub) Poll() error {
 	return nil
 }
 
+// Start is a method of PidWatcherStub, returns nil.
 func (w *PidWatcherStub) Start() error {
 	return nil
 }
 
+// Stop is a method of PidWatcherStub that doing nothing here.
 func (w *PidWatcherStub) Stop() {
 }
 
+// Dump is a method of PidWatcherStub, returns "".
 func (w *PidWatcherStub) Dump([]string) string {
 	return ""
 }
