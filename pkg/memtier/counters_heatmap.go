@@ -24,6 +24,7 @@ import (
 	"time"
 )
 
+// HeatmapConfig represents the configuration for a heatmap.
 type HeatmapConfig struct {
 	// HeatMax is the maximum heat of a range
 	HeatMax float64
@@ -43,8 +44,10 @@ type HeatmapConfig struct {
 	HeatClasses int
 }
 
+// HeatmapConfigDefaults defines default configuration settings as JSON.
 var HeatmapConfigDefaults string = `{"HeatMax":1.0,"HeatRetention":0.9513,"HeatClasses":10}`
 
+// Heatmap stores heatmap configuration and heat information for the pid.
 type Heatmap struct {
 	config *HeatmapConfig
 	mutex  sync.Mutex
@@ -55,10 +58,13 @@ type Heatmap struct {
 	pidHrs Heats
 }
 
+// Heats stores the heatRanges information for the pid.
 type Heats map[int]*HeatRanges
 
+// HeatRanges is a slice of HeatRange pointers.
 type HeatRanges []*HeatRange
 
+// HeatRange stores memory addresse, length, heat information and timestamps.
 type HeatRange struct {
 	addr    uint64
 	length  uint64  // number of pages
@@ -67,52 +73,58 @@ type HeatRange struct {
 	updated int64
 }
 
+// MarshalJSON converts HeatRange to JSON.
 func (hr *HeatRange) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("{\"addr\":%d,\"length\":%d,\"heat\":%f,\"created\":%d,\"updated\":%d}", hr.addr, hr.length, hr.heat, hr.created, hr.updated)), nil
 }
 
+// UnmarshalJSON converts JSON to HeatRange.
 func (hr *HeatRange) UnmarshalJSON(raw []byte) error {
-	hrJson := struct {
+	hrJSON := struct {
 		Addr    uint64
 		Length  uint64
 		Heat    float64
 		Created int64
 		Updated int64
 	}{}
-	if err := json.Unmarshal(raw, &hrJson); err != nil {
+	if err := json.Unmarshal(raw, &hrJSON); err != nil {
 		return fmt.Errorf("failed to unmarshal heats from %v: %w", raw, err)
 	}
-	hr.addr = hrJson.Addr
-	hr.length = hrJson.Length
-	hr.heat = hrJson.Heat
-	hr.created = hrJson.Created
-	hr.updated = hrJson.Updated
+	hr.addr = hrJSON.Addr
+	hr.length = hrJSON.Length
+	hr.heat = hrJSON.Heat
+	hr.created = hrJSON.Created
+	hr.updated = hrJSON.Updated
 	return nil
 }
 
+// NewCounterHeatmap creates a new Heatmap instance.
 func NewCounterHeatmap() *Heatmap {
 	heatmap := &Heatmap{
 		pidHrs: make(map[int]*HeatRanges),
 	}
-	if err := heatmap.SetConfigJson(HeatmapConfigDefaults); err != nil {
+	if err := heatmap.SetConfigJSON(HeatmapConfigDefaults); err != nil {
 		panic(fmt.Sprintf("heatmap default configuration error: %s", err))
 	}
 	return heatmap
 }
 
-func (h *Heatmap) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the heatmap configuration from a JSON string.
+func (h *Heatmap) SetConfigJSON(configJSON string) error {
 	config := &HeatmapConfig{}
-	if err := json.Unmarshal([]byte(configJson), config); err != nil {
+	if err := json.Unmarshal([]byte(configJSON), config); err != nil {
 		return err
 	}
 	return h.SetConfig(config)
 }
 
+// SetConfig sets the heatmap configuration.
 func (h *Heatmap) SetConfig(config *HeatmapConfig) error {
 	h.config = config
 	return nil
 }
 
+// Pids returns a slice of process IDs stored in the heatmap.
 func (h *Heatmap) Pids() []int {
 	pids := make([]int, 0, len(h.pidHrs))
 	for pid := range h.pidHrs {
@@ -121,7 +133,7 @@ func (h *Heatmap) Pids() []int {
 	return pids
 }
 
-// Dump presents heatmap as a string that indicate heat of each range
+// Dump presents heatmap as a string that indicate heat of each range.
 func (h *Heatmap) Dump() string {
 	lines := []string{}
 	pids := h.Pids()
@@ -134,6 +146,7 @@ func (h *Heatmap) Dump() string {
 	return strings.Join(lines, "\n")
 }
 
+// String converts HeatRange to a string representation.
 func (hr *HeatRange) String() string {
 	return fmt.Sprintf("{%x-%x(%d),%f,%d,%.6fs}",
 		hr.addr,
@@ -144,10 +157,12 @@ func (hr *HeatRange) String() string {
 		float64(hr.updated-hr.created)/float64(time.Second))
 }
 
+// AddrRange returns the address range of a HeatRange.
 func (hr *HeatRange) AddrRange() AddrRange {
 	return AddrRange{hr.addr, hr.length}
 }
 
+// HeatClass calculates the heat class of a HeatRange.
 func (h *Heatmap) HeatClass(hr *HeatRange) int {
 	if h.config.HeatMax == 0 {
 		return 0
@@ -159,6 +174,7 @@ func (h *Heatmap) HeatClass(hr *HeatRange) int {
 	return heatClass
 }
 
+// UpdateFromCounters updates the heatmap based on TrackerCounters data.
 func (h *Heatmap) UpdateFromCounters(tcs *TrackerCounters, timestamp int64) {
 	if h.pidHrs == nil {
 		panic("Heatmap data structure missing, not instantiated with NewCounterHeatmap")
@@ -177,6 +193,7 @@ func (h *Heatmap) UpdateFromCounters(tcs *TrackerCounters, timestamp int64) {
 	}
 }
 
+// updateFromCounter updates the heatmap based on a single TrackerCounter.
 func (h *Heatmap) updateFromCounter(tc *TrackerCounter, timestamp int64) {
 	pid := tc.AR.Pid()
 	for _, ar := range tc.AR.Ranges() {
@@ -195,6 +212,7 @@ func (h *Heatmap) updateFromCounter(tc *TrackerCounter, timestamp int64) {
 	}
 }
 
+// updateFromPidHeatRange updates the heatmap based on a single HeatRange for a specific pid.
 func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 	hrs, ok := h.pidHrs[pid]
 	if !ok {
@@ -303,12 +321,14 @@ func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 	hrs.Sort()
 }
 
+// Sort sorts the heatRanges by address.
 func (hrs *HeatRanges) Sort() {
 	sort.Slice(*hrs, func(i, j int) bool {
 		return (*hrs)[i].addr < (*hrs)[j].addr
 	})
 }
 
+// Overlapping returns a subset of heatRanges that overlap with a given HeatRange.
 func (hrs *HeatRanges) Overlapping(hr0 *HeatRange) *HeatRanges {
 	first := sort.Search(len(*hrs), func(i int) bool { return (*hrs)[i].addr+(*hrs)[i].length*constUPagesize > hr0.addr })
 	hr0EndAddr := hr0.addr + hr0.length*constUPagesize
@@ -317,13 +337,13 @@ func (hrs *HeatRanges) Overlapping(hr0 *HeatRange) *HeatRanges {
 		if hr0EndAddr <= hr.addr {
 			break
 		}
-		count += 1
+		count++
 	}
 	subHeatRanges := (*hrs)[first : first+count]
 	return &subHeatRanges
 }
 
-// HeatRangeAt returns a HeatRange at address
+// HeatRangeAt returns a HeatRange at address.
 func (h *Heatmap) HeatRangeAt(pid int, addr uint64) *HeatRange {
 	hrs, ok := h.pidHrs[pid]
 	if !ok {
@@ -362,6 +382,7 @@ func (h *Heatmap) ForEachRange(pid int, handleRange func(*HeatRange) int) {
 	}
 }
 
+// Sorted returns sorted heatRanges based on a custom comparison function.
 func (h *Heatmap) Sorted(pid int, cmp func(*HeatRange, *HeatRange) bool) HeatRanges {
 	hrs, ok := h.pidHrs[pid]
 	if !ok || len(*hrs) == 0 {

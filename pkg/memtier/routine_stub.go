@@ -14,6 +14,7 @@
 
 package memtier
 
+// RoutineStub defines empty struct for the scenarios without routines configured.
 type RoutineStub struct {
 }
 
@@ -21,29 +22,36 @@ func init() {
 	RoutineRegister("stub", NewRoutineStub)
 }
 
+// NewRoutineStub creates a new instance of RoutineStub with default configuration.
 func NewRoutineStub() (Routine, error) {
 	return &RoutineStub{}, nil
 }
 
-func (r *RoutineStub) SetConfigJson(configJson string) error {
+// SetConfigJSON is a method of RoutineStub, returns nil.
+func (r *RoutineStub) SetConfigJSON(configJSON string) error {
 	return nil
 }
 
-func (r *RoutineStub) GetConfigJson() string {
+// GetConfigJSON is a method of RoutineStub, returns "".
+func (r *RoutineStub) GetConfigJSON() string {
 	return ""
 }
 
+// SetPolicy is a method of RoutineStub, returns "".
 func (r *RoutineStub) SetPolicy(Policy) error {
 	return nil
 }
 
+// Start is a method of RoutineStub, returns nil.
 func (r *RoutineStub) Start() error {
 	return nil
 }
 
+// Stop is a method of RoutineStub that doing nothing here.
 func (r *RoutineStub) Stop() {
 }
 
+// Dump is a method of RoutineStub, returns "".
 func (r *RoutineStub) Dump(args []string) string {
 	return ""
 }

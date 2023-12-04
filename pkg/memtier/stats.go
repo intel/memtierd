@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Stats represents various statistics related to memory moving.
 type Stats struct {
 	sync.RWMutex
 	namePulse   mapStringPStatsPulse
@@ -21,6 +22,7 @@ type Stats struct {
 
 var recMovesBufSize int = 1024 * 256
 
+// StatsPidMadvised contains the summarized statistics related to process_madvise system calls for a specific process.
 type StatsPidMadvised struct {
 	sumSyscalls     uint64
 	sumPageCount    uint64
@@ -28,6 +30,7 @@ type StatsPidMadvised struct {
 	errnoPageCount  map[int]uint64
 }
 
+// StatsPidMoved contains the summarized statistics related to move_pages system calls for a specific process.
 type StatsPidMoved struct {
 	sumSyscalls       uint64
 	sumReqs           uint64
@@ -39,6 +42,7 @@ type StatsPidMoved struct {
 	lastMove          StatsMoved
 }
 
+// StatsPidScanned contains the summarized statistics related to memory scans for a specific process.
 type StatsPidScanned struct {
 	sumTimeUs    uint64
 	sumScanned   uint64
@@ -52,16 +56,19 @@ type StatsPidScanned struct {
 	count        uint64
 }
 
+// StatsPulse represents heartbeat statistics for a specific name.
 type StatsPulse struct {
 	sumBeats   uint64
 	firstBeat  int64
 	latestBeat int64
 }
 
+// StatsHeartbeat represents a heartbeat for a specific name.
 type StatsHeartbeat struct {
 	name string
 }
 
+// StatsMadvised represents statistics related to process_madvise system calls for a specific process.
 type StatsMadvised struct {
 	pid       int
 	sysRet    int
@@ -70,6 +77,7 @@ type StatsMadvised struct {
 	pageCount uint64
 }
 
+// StatsMoved represents statistics related to move_pages system calls for a specific process.
 type StatsMoved struct {
 	pid            int
 	sysRet         uint
@@ -81,6 +89,7 @@ type StatsMoved struct {
 	errorCounts    map[int]int
 }
 
+// StatsPageScan represents statistics related to memory scans for a specific process.
 type StatsPageScan struct {
 	pid      int
 	timeUs   int64
@@ -122,6 +131,7 @@ func newStatsPidScanned() *StatsPidScanned {
 	return &StatsPidScanned{}
 }
 
+// GetStats returns the singleton instance of Stats.
 func GetStats() *Stats {
 	return stats
 }
@@ -147,6 +157,7 @@ func (s *Stats) MadvisedPageCount(pid int, advise int) uint64 {
 	return totalPages
 }
 
+// Store stores various statistics based on the type of entry provided.
 func (s *Stats) Store(entry interface{}) {
 	s.Lock()
 	defer s.Unlock()
@@ -158,7 +169,7 @@ func (s *Stats) Store(entry interface{}) {
 			pulse.firstBeat = time.Now().UnixNano()
 			s.namePulse[v.name] = pulse
 		}
-		pulse.sumBeats += 1
+		pulse.sumBeats++
 		pulse.latestBeat = time.Now().UnixNano()
 	case StatsMadvised:
 		spm, ok := s.pidMadvises[v.pid]
@@ -166,7 +177,7 @@ func (s *Stats) Store(entry interface{}) {
 			spm = newStatsPidMadvised()
 			s.pidMadvises[v.pid] = spm
 		}
-		spm.sumSyscalls += 1
+		spm.sumSyscalls++
 		spm.sumPageCount += v.pageCount
 		spm.advisePageCount[v.advise] += v.pageCount
 		spm.errnoPageCount[v.errno] += v.pageCount
@@ -177,7 +188,7 @@ func (s *Stats) Store(entry interface{}) {
 			spm = newStatsPidMoved()
 			s.pidMoves[v.pid] = spm
 		}
-		spm.sumSyscalls += 1
+		spm.sumSyscalls++
 		spm.sumReqs += uint64(v.reqCount)
 		spm.sumDestNode += uint64(v.destNodeCount)
 		spm.sumOtherNode += uint64(v.otherNodeCount)
@@ -198,7 +209,7 @@ func (s *Stats) Store(entry interface{}) {
 			sps = newStatsPidScanned()
 			s.pidScans[v.pid] = sps
 		}
-		sps.count += 1
+		sps.count++
 		sps.sumTimeUs += uint64(v.timeUs)
 		sps.sumScanned += v.scanned
 		sps.sumAccessed += v.accessed
@@ -213,6 +224,7 @@ func (s *Stats) Store(entry interface{}) {
 	}
 }
 
+// LastMove returns the last move statistics for a specific process.
 func (s *Stats) LastMove(pid int) *StatsMoved {
 	s.Lock()
 	defer s.Unlock()
@@ -223,6 +235,7 @@ func (s *Stats) LastMove(pid int) *StatsMoved {
 	return &spm.lastMove
 }
 
+// LastMoveWithError returns the last move statistics with an error for a specific process.
 func (s *Stats) LastMoveWithError(pid int) *StatsMoved {
 	s.Lock()
 	defer s.Unlock()
@@ -233,6 +246,7 @@ func (s *Stats) LastMoveWithError(pid int) *StatsMoved {
 	return &spm.lastMoveWithError
 }
 
+// Dump provides a way to dump recorded move statistics.
 func (s *Stats) Dump(args []string) string {
 	s.Lock()
 	defer s.Unlock()
@@ -341,20 +355,20 @@ func (s *Stats) tableMovePages(format string) []string {
 	lines = append(lines, fmt.Sprintf(headerFmt[format], headers...))
 	for _, pid := range s.pidMoves.sortedKeys() {
 		spm := s.pidMoves[pid]
-		node_moved_list := []string{}
+		nodeMovedList := []string{}
 		for _, node := range spm.sumDestNodePages.sortedKeys() {
-			node_moved_list = append(node_moved_list, fmt.Sprintf("%d:%.3f",
+			nodeMovedList = append(nodeMovedList, fmt.Sprintf("%d:%.3f",
 				node,
 				float64(spm.sumDestNodePages[node]*constUPagesize)/float64(1024*1024*1024)))
 		}
-		node_moved := strings.Join(node_moved_list, ";")
+		nodeMoved := strings.Join(nodeMovedList, ";")
 		lines = append(lines, fmt.Sprintf(rowFmt[format],
 			pid,
 			spm.sumSyscalls,
 			spm.sumReqs,
 			spm.sumDestNode,
 			float64(spm.sumDestNode*constUPagesize)/float64(1024*1024*1024),
-			node_moved))
+			nodeMoved))
 	}
 	return lines
 }
@@ -401,7 +415,6 @@ func (s *Stats) tableMemoryScans(format string) []string {
 	}
 	lines = append(lines, fmt.Sprintf(headerFmt[format], headers...))
 	lines = append(lines, "")
-	lines = append(lines)
 	for _, pid := range s.pidScans.sortedKeys() {
 		sps := s.pidScans[pid]
 		lines = append(lines, fmt.Sprintf(rowFmt[format],
@@ -420,6 +433,13 @@ func (s *Stats) tableMemoryScans(format string) []string {
 	return lines
 }
 
+// Summarize generates a formatted string summary of various statistics based on the specified tables and format.
+// It supports different tables, including events, process_madvise, move_pages, move_pages_errors, and memory_scans.
+// Args:
+//   - format: "txt" or "csv".
+//   - tables: Names of tables to include in the summary (e.g., "events", "move_pages").
+//
+// Returns: A formatted string containing the summary or an error message for invalid parameters.
 func (s *Stats) Summarize(format string, tables ...string) string {
 	allTables := []string{"events", "process_madvise", "move_pages", "move_pages_errors", "memory_scans"}
 	lines := []string{}
@@ -451,10 +471,14 @@ func (s *Stats) Summarize(format string, tables ...string) string {
 	return strings.Join(lines, "\n")
 }
 
+// String returns a string representation of the Stats object.
+// It includes move statistics for each PID.
 func (s *Stats) String() string {
 	return fmt.Sprintf("%v", s.pidMoves)
 }
 
+// String returns a string representation of the StatsMoved object.
+// It includes details of the move_pages syscall, including inputs and results.
 func (sm *StatsMoved) String() string {
 	return fmt.Sprintf("move_pages(pid=%d, pagecount=%d, firstpage=%x dest=%d) => (return=%d on_dest=%d on_other=%d [errno:pagecount]=%v)",
 		// inputs

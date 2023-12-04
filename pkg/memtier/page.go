@@ -18,28 +18,33 @@ import (
 	"fmt"
 )
 
+// Pages represents a collection of memory pages associated with a process.
 type Pages struct {
 	pid   int
 	pages []Page
 }
 
+// Page represents an individual memory page with an address.
 type Page struct {
 	addr uint64
 }
 
+// Addr returns the address of the Page.
 func (p Page) Addr() uint64 {
 	return p.addr
 }
 
+// Pid returns the process ID associated with the Pages.
 func (pp *Pages) Pid() int {
 	return pp.pid
 }
 
+// Pages returns the slice of Page objects associated with the Pages.
 func (pp *Pages) Pages() []Page {
 	return pp.pages
 }
 
-// Offset returns pages starting from an offset
+// Offset returns pages starting from an offset.
 func (pp *Pages) Offset(offset int) *Pages {
 	pagesLeft := len(pp.pages)
 	if offset > pagesLeft {
@@ -54,7 +59,7 @@ func (pp *Pages) Offset(offset int) *Pages {
 	}
 }
 
-// InAddrRanges returns process pages that are in any of given address ranges
+// InAddrRanges returns process pages that are in any of given address ranges.
 func (pp *Pages) InAddrRanges(addrRanges ...AddrRange) *Pages {
 	// TODO: Implement me!
 
@@ -89,9 +94,9 @@ func (pp *Pages) AddrRanges(count int) *AddrRanges {
 			contRegionStartAddr = p.addr
 			contRegionPageCount = 1
 		} else {
-			contRegionPageCount += 1
+			contRegionPageCount++
 		}
-		totalPageCount += 1
+		totalPageCount++
 	}
 	ar.addrs = append(ar.addrs, AddrRange{
 		addr:   contRegionStartAddr,
@@ -100,12 +105,14 @@ func (pp *Pages) AddrRanges(count int) *AddrRanges {
 	return ar
 }
 
+// SwapOut swaps out specified number of contiguous address ranges.
 func (pp *Pages) SwapOut(count int) error {
 	// Build contiguous address ranges from pages and swap them out.
 	ar := pp.AddrRanges(count)
 	return ar.SwapOut()
 }
 
+// MoveTo moves specified number of pages to a given node.
 func (pp *Pages) MoveTo(node Node, count int) (int, error) {
 	pageCount, pages := pp.countAddrs()
 	uCount := uint(count)
@@ -129,11 +136,11 @@ func (pp *Pages) MoveTo(node Node, count int) (int, error) {
 	if sysRet == 0 {
 		for _, node := range status {
 			if node == intNode {
-				destNodeCount += 1
+				destNodeCount++
 			} else if node < 0 {
-				statusErrorCounts[-node] += 1
+				statusErrorCounts[-node]++
 			} else {
-				otherNodeCount += 1
+				otherNodeCount++
 			}
 		}
 	} else {
@@ -202,7 +209,7 @@ func (pp *Pages) status() ([]int, error) {
 	return currentStatus, err
 }
 
-// NodePageCount returns map: numanode -> number of pages on the node
+// NodePageCount returns map: numanode -> number of pages on the node.
 func (pp *Pages) NodePageCount() map[Node]uint {
 	currentStatus, err := pp.status()
 	if err != nil {
@@ -214,14 +221,15 @@ func (pp *Pages) NodePageCount() map[Node]uint {
 
 	for _, pageStatus := range currentStatus {
 		if pageStatus < 0 {
-			pageErrors += 1
+			pageErrors++
 			continue
 		}
-		nodePageCount[Node(pageStatus)] += 1
+		nodePageCount[Node(pageStatus)]++
 	}
 	return nodePageCount
 }
 
+// Nodes returns a slice of Nodes associated with the Pages.
 func (pp *Pages) Nodes() []Node {
 	nodePageCount := pp.NodePageCount()
 	nodes := make([]Node, len(nodePageCount))

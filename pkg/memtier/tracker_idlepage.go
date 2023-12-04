@@ -23,6 +23,8 @@ import (
 	"time"
 )
 
+// TrackerIdlePageConfig represents the configuration for the TrackerIdlePage.
+// It defines parameters such as the number of pages in a region, scan intervals, etc.
 type TrackerIdlePageConfig struct {
 	// PagesInRegion is the number of pages in every address range
 	// that is being watched and moved from a NUMA node to another.
@@ -56,6 +58,7 @@ type TrackerIdlePageConfig struct {
 
 const trackerIdlePageDefaults string = `{"PagesInRegion":512,"MaxCountPerRegion":1,"ScanIntervalMs":5000,"RegionsUpdateMs":10000}`
 
+// TrackerIdlePage is a tracker implementation for monitoring idle pages.
 type TrackerIdlePage struct {
 	mutex   sync.Mutex
 	config  *TrackerIdlePageConfig
@@ -73,6 +76,7 @@ func init() {
 	TrackerRegister("idlepage", NewTrackerIdlePage)
 }
 
+// NewTrackerIdlePage creates a new instance of TrackerIdlePage.
 func NewTrackerIdlePage() (Tracker, error) {
 	bmFile, err := ProcPageIdleBitmapOpen()
 	if err != nil {
@@ -85,23 +89,25 @@ func NewTrackerIdlePage() (Tracker, error) {
 		accesses: make(map[int]map[uint64]map[uint64]*accessCounter),
 		pmAttrs:  PMPresentSet | PMExclusiveSet,
 	}
-	err = t.SetConfigJson(trackerIdlePageDefaults)
+	err = t.SetConfigJSON(trackerIdlePageDefaults)
 	if err != nil {
 		return nil, fmt.Errorf("invalid idlepage default configuration")
 	}
 	return t, nil
 }
 
-func (t *TrackerIdlePage) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration for TrackerIdlePage from a JSON string.
+func (t *TrackerIdlePage) SetConfigJSON(configJSON string) error {
 	config := &TrackerIdlePageConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	t.config = config
 	return nil
 }
 
-func (t *TrackerIdlePage) GetConfigJson() string {
+// GetConfigJSON returns the current configuration of TrackerIdlePage as a JSON string.
+func (t *TrackerIdlePage) GetConfigJSON() string {
 	if t.config == nil {
 		return ""
 	}
@@ -128,6 +134,7 @@ func (t *TrackerIdlePage) addRanges(pid int) {
 	}
 }
 
+// AddPids adds process IDs to be tracked by TrackerIdlePage.
 func (t *TrackerIdlePage) AddPids(pids []int) {
 	log.Debugf("TrackerIdlePage: AddPids(%v)\n", pids)
 	for _, pid := range pids {
@@ -135,6 +142,7 @@ func (t *TrackerIdlePage) AddPids(pids []int) {
 	}
 }
 
+// RemovePids removes process IDs from being tracked by TrackerIdlePage.
 func (t *TrackerIdlePage) RemovePids(pids []int) {
 	log.Debugf("TrackerIdlePage: RemovePids(%v)\n", pids)
 	if pids == nil {
@@ -153,12 +161,14 @@ func (t *TrackerIdlePage) removePid(pid int) {
 	delete(t.accesses, pid)
 }
 
+// ResetCounters resets the access counters of TrackerIdlePage.
 func (t *TrackerIdlePage) ResetCounters() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.accesses = make(map[int]map[uint64]map[uint64]*accessCounter)
 }
 
+// GetCounters returns the access counters of TrackerIdlePage.
 func (t *TrackerIdlePage) GetCounters() *TrackerCounters {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -188,6 +198,7 @@ func (t *TrackerIdlePage) GetCounters() *TrackerCounters {
 	return tcs
 }
 
+// Start begins tracking idle pages.
 func (t *TrackerIdlePage) Start() error {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -203,6 +214,7 @@ func (t *TrackerIdlePage) Start() error {
 	return nil
 }
 
+// Stop halts the tracking of idle pages.
 func (t *TrackerIdlePage) Stop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -279,7 +291,7 @@ func (t *TrackerIdlePage) countPages() {
 	// It counts number of pages accessed and written in a region.
 	// The result is stored to cntPagesAccessed and cntPagesWritten.
 	pageHandler := func(pagemapBits uint64, pageAddr uint64) int {
-		totScanned += 1
+		totScanned++
 		pfn := pagemapBits & PM_PFN
 		pageIdle, err := bmFile.GetIdle(pfn)
 		if err != nil {
@@ -296,7 +308,7 @@ func (t *TrackerIdlePage) countPages() {
 				// Compound tail pages never get idle bit,
 				// so read accesses only from idle bits of
 				// normal pages and heads of compound pages.
-				cntPagesAccessed += 1
+				cntPagesAccessed++
 			}
 		}
 		if cntPagesAccessed >= maxCount {
@@ -417,6 +429,7 @@ func (t *TrackerIdlePage) setIdleBits() {
 	}
 }
 
+// Dump provides a mechanism for dumping raw access data.
 func (t *TrackerIdlePage) Dump(args []string) string {
 	usage := "Usage: dump raw PARAMS"
 	if len(args) == 0 {

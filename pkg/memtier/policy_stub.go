@@ -14,6 +14,7 @@
 
 package memtier
 
+// PolicyStub defines empty struct for the scenarios without policy configured.
 type PolicyStub struct {
 }
 
@@ -21,37 +22,49 @@ func init() {
 	PolicyRegister("stub", NewPolicyStub)
 }
 
+// NewPolicyStub creates a new instance of PolicyStub with default configuration.
 func NewPolicyStub() (Policy, error) {
 	return &PolicyStub{}, nil
 }
 
-func (p *PolicyStub) SetConfigJson(configJson string) error {
+// SetConfigJSON is a method of PolicyStub, returns nil.
+func (p *PolicyStub) SetConfigJSON(configJSON string) error {
 	return nil
 }
 
-func (p *PolicyStub) GetConfigJson() string {
+// GetConfigJSON is a method of PolicyStub, returns "".
+func (p *PolicyStub) GetConfigJSON() string {
 	return ""
 }
 
+// Start is a method of PolicyStub, returns nil.
 func (p *PolicyStub) Start() error {
 	return nil
 }
 
+// Stop is a method of TrackerStub that doing nothing here.
 func (p *PolicyStub) Stop() {
 }
 
+// PidWatcher is a method of PolicyStub, returns nil.
+// As when there is no policy, pidwatcher does not make sense.
 func (p *PolicyStub) PidWatcher() PidWatcher {
 	return nil
 }
 
+// Mover is a method of PolicyStub, returns nil.
+// As when there is no policy, mover does not make sense.
 func (p *PolicyStub) Mover() *Mover {
 	return nil
 }
 
+// Tracker is a method of PolicyStub, returns nil.
+// As when there is no policy, tracker does not make sense.
 func (p *PolicyStub) Tracker() Tracker {
 	return nil
 }
 
+// Dump is a method of PolicyStub, returns "".
 func (p *PolicyStub) Dump(args []string) string {
 	return ""
 }

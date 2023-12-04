@@ -30,25 +30,23 @@ import (
 	_ "github.com/intel/memtierd/pkg/version"
 )
 
-type DeltaCycle struct {
+type deltaCycle struct {
 	delta   int
 	cycleNs time.Duration
 	nextNs  time.Duration
 }
 
-type BArray struct {
+type bArray struct {
 	readers int
 	writers int
 	b       []byte
 }
 
-var bas []*BArray = []*BArray{} // array of byte arrays
+var bas []*bArray = []*bArray{} // array of byte arrays
 
 var bValue byte = 0
 
 var exerciserCount int = 0
-
-var readers, writers []func()
 
 var bReaderCount int
 var bReadSize int64
@@ -70,7 +68,7 @@ var perfPrintInterval time.Duration
 
 var constPagesize int = os.Getpagesize()
 
-func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, count int64, interval time.Duration, portionCount int, offsetDelta int64, countDelta int64) {
+func bExerciser(exerciserID int, read, write bool, ba *bArray, offset int64, count int64, interval time.Duration, portionCount int, offsetDelta int64, countDelta int64) {
 	b := ba.b
 	if count >= int64(len(b[offset:])) {
 		count = int64(len(b[offset:])) - 1
@@ -82,10 +80,10 @@ func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, cou
 	if write {
 		exerciserDesc += "write"
 	}
-	fmt.Printf("start exerciser %d: %s %s\n", exerciserId, exerciserDesc, bAddrRange(ba.b[offset:], int(count)))
+	fmt.Printf("start exerciser %d: %s %s\n", exerciserID, exerciserDesc, bAddrRange(ba.b[offset:], int(count)))
 	round := int64(0)
 	defer func() {
-		fmt.Printf("stop exerciser %d: %s %s\n", exerciserId, exerciserDesc, bAddrRange(ba.b[offset:], int(count)))
+		fmt.Printf("stop exerciser %d: %s %s\n", exerciserID, exerciserDesc, bAddrRange(ba.b[offset:], int(count)))
 		runtime.GC()
 	}()
 	perfPrintStart := time.Now()
@@ -135,16 +133,16 @@ func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, cou
 		if sleepDuration > 0 {
 			time.Sleep(sleepDuration)
 			if interval >= 1000000 {
-				fmt.Printf("wake exerciser %d: round %d range %x-%x\n", exerciserId, round, &b[roundStartIndex], &b[roundStartIndex+roundCount-1])
+				fmt.Printf("wake exerciser %d: round %d range %x-%x\n", exerciserID, round, &b[roundStartIndex], &b[roundStartIndex+roundCount-1])
 			}
 		}
 
 		loopStart = time.Now()
-		round += 1
+		round++
 		if perfPrintInterval > 0 {
 			perfPrintDuration := time.Since(perfPrintStart)
 			if perfPrintDuration >= perfPrintInterval {
-				fmt.Printf("avgspeed exerciser %d: %.6f s/round\n", exerciserId, float32(perfPrintDuration)/float32(round-perfPrintRounds)/float32(time.Second))
+				fmt.Printf("avgspeed exerciser %d: %.6f s/round\n", exerciserID, float32(perfPrintDuration)/float32(round-perfPrintRounds)/float32(time.Second))
 				perfPrintRounds = round
 				perfPrintStart = time.Now()
 			}
@@ -152,7 +150,7 @@ func bExerciser(exerciserId int, read, write bool, ba *BArray, offset int64, cou
 	}
 }
 
-func bReallocators(bSize int64, deltaCycles []DeltaCycle) {
+func bReallocators(bSize int64, deltaCycles []deltaCycle) {
 	nowNs := time.Duration(time.Now().UnixNano())
 	// Calculate next (dc.nextNs) wake up times for all deltas.
 	for i, dc := range deltaCycles {
@@ -248,7 +246,7 @@ func numBytes(arg, s string) int64 {
 }
 
 func allocateBArray(bSize int64) {
-	ba := &BArray{
+	ba := &bArray{
 		b: make([]byte, bSize),
 	}
 	bas = append(bas, ba)
@@ -337,20 +335,20 @@ func main() {
 	// create byte array reallocators
 	if *optBCountDelta != "" {
 		deltaCyclesSpec := *optBCountDelta
-		deltaCycles := []DeltaCycle{}
+		deltaCycles := []deltaCycle{}
 		for _, deltaCycleSpec := range strings.Split(deltaCyclesSpec, ",") {
-			deltaCycle := strings.Split(deltaCycleSpec, "/")
-			if len(deltaCycle) != 2 {
+			dc := strings.Split(deltaCycleSpec, "/")
+			if len(dc) != 2 {
 				fmt.Printf("syntax error in %q (%q): expected DELTA/TIME\n", deltaCyclesSpec, deltaCycleSpec)
 				os.Exit(1)
 			}
-			delta, err := strconv.Atoi(deltaCycle[0])
+			delta, err := strconv.Atoi(dc[0])
 			if err != nil {
-				fmt.Printf("bad delta in %q (%q): expected INT\n", deltaCyclesSpec, deltaCycle[0])
+				fmt.Printf("bad delta in %q (%q): expected INT\n", deltaCyclesSpec, dc[0])
 				os.Exit(1)
 			}
-			cycle := numNs("-bcd", deltaCycle[1])
-			deltaCycles = append(deltaCycles, DeltaCycle{delta, cycle, 0})
+			cycle := numNs("-bcd", dc[1])
+			deltaCycles = append(deltaCycles, deltaCycle{delta, cycle, 0})
 		}
 		fmt.Printf("creating byte array reallocators\n")
 		go bReallocators(bSize, deltaCycles)

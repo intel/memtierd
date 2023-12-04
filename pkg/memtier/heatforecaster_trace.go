@@ -21,31 +21,37 @@ import (
 	"time"
 )
 
+// HeatForecasterTraceConfig represents the configuration for the HeatForecasterTrace.
 type HeatForecasterTraceConfig struct {
 	File         string
 	HideHeatZero bool
 }
 
+// HeatForecasterTrace is a heat forecaster that writes heat data to a trace file.
 type HeatForecasterTrace struct {
 	config *HeatForecasterTraceConfig
 }
 
+// init registers the HeatForecasterTrace implementation.
 func init() {
 	HeatForecasterRegister("trace", NewHeatForecasterTrace)
 }
 
+// NewHeatForecasterTrace creates a new instance of HeatForecasterTrace.
 func NewHeatForecasterTrace() (HeatForecaster, error) {
 	return &HeatForecasterTrace{}, nil
 }
 
-func (hf *HeatForecasterTrace) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration for the HeatForecasterTrace from a JSON string.
+func (hf *HeatForecasterTrace) SetConfigJSON(configJSON string) error {
 	config := &HeatForecasterTraceConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	return hf.SetConfig(config)
 }
 
+// SetConfig sets the configuration for the HeatForecasterTrace.
 func (hf *HeatForecasterTrace) SetConfig(config *HeatForecasterTraceConfig) error {
 	if config.File == "" {
 		return fmt.Errorf("invalid trace heatforecaster configuration: 'file' missing")
@@ -54,7 +60,8 @@ func (hf *HeatForecasterTrace) SetConfig(config *HeatForecasterTraceConfig) erro
 	return nil
 }
 
-func (hf *HeatForecasterTrace) GetConfigJson() string {
+// GetConfigJSON returns the JSON representation of the HeatForecasterTrace's configuration.
+func (hf *HeatForecasterTrace) GetConfigJSON() string {
 	configString, err := json.Marshal(hf.config)
 	if err != nil {
 		return ""
@@ -62,6 +69,7 @@ func (hf *HeatForecasterTrace) GetConfigJson() string {
 	return string(configString)
 }
 
+// Forecast writes heat data to a trace file based on the configured settings.
 func (hf *HeatForecasterTrace) Forecast(heats *Heats) (*Heats, error) {
 	if heats == nil {
 		return nil, nil
@@ -84,6 +92,7 @@ func (hf *HeatForecasterTrace) Forecast(heats *Heats) (*Heats, error) {
 	return nil, nil
 }
 
+// Dump returns a string representation of the HeatForecasterTrace for debugging purposes.
 func (hf *HeatForecasterTrace) Dump(args []string) string {
-	return "HeatForecasterTrace{config=" + hf.GetConfigJson() + "}"
+	return "HeatForecasterTrace{config=" + hf.GetConfigJSON() + "}"
 }

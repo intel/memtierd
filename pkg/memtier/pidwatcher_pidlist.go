@@ -19,10 +19,12 @@ import (
 	"fmt"
 )
 
+// PidWatcherPidlistConfig holds the configuration for PidWatcherPidlist.
 type PidWatcherPidlistConfig struct {
 	Pids []int // list of absolute cgroup directory paths
 }
 
+// PidWatcherPidlist is an implementation of PidWatcher that watches a predefined list of PIDs.
 type PidWatcherPidlist struct {
 	config      *PidWatcherPidlistConfig
 	pidListener PidListener
@@ -32,20 +34,24 @@ func init() {
 	PidWatcherRegister("pidlist", NewPidWatcherPidlist)
 }
 
+// NewPidWatcherPidlist creates a new instance of PidWatcherPidlist.
 func NewPidWatcherPidlist() (PidWatcher, error) {
 	return &PidWatcherPidlist{}, nil
 }
 
-func (w *PidWatcherPidlist) SetConfigJson(configJson string) error {
+// SetConfigJSON is a method of PidWatcherPidlist that sets the configuration from JSON.
+// It unmarshals the input JSON string into the PidWatcherPidlistConfig structure.
+func (w *PidWatcherPidlist) SetConfigJSON(configJSON string) error {
 	config := &PidWatcherPidlistConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	w.config = config
 	return nil
 }
 
-func (w *PidWatcherPidlist) GetConfigJson() string {
+// GetConfigJSON is a method of PidWatcherPidlist that returns the current configuration as a JSON string.
+func (w *PidWatcherPidlist) GetConfigJSON() string {
 	if w.config == nil {
 		return ""
 	}
@@ -55,10 +61,13 @@ func (w *PidWatcherPidlist) GetConfigJson() string {
 	return ""
 }
 
+// SetPidListener is a method of PidWatcherPidlist that sets the PidListener.
 func (w *PidWatcherPidlist) SetPidListener(l PidListener) {
 	w.pidListener = l
 }
 
+// Poll is a method of PidWatcherPidlist that simulates polling for PIDs.
+// It adds the configured PIDs to the PidListener, if available.
 func (w *PidWatcherPidlist) Poll() error {
 	if w.config == nil {
 		return fmt.Errorf("pidwatcher pidlist: tried to poll without a configuration")
@@ -71,6 +80,8 @@ func (w *PidWatcherPidlist) Poll() error {
 	return nil
 }
 
+// Start is a method of PidWatcherPidlist that simulates starting the PidWatcher.
+// It adds the configured PIDs to the PidListener, if available.
 func (w *PidWatcherPidlist) Start() error {
 	if w.config == nil {
 		return fmt.Errorf("pidwatcher pidlist: tried to start without a configuration")
@@ -83,9 +94,11 @@ func (w *PidWatcherPidlist) Start() error {
 	return nil
 }
 
+// Stop (does nothing here).
 func (w *PidWatcherPidlist) Stop() {
 }
 
+// Dump is a method of PidWatcherPidlist that returns a string representation of the current instance.
 func (w *PidWatcherPidlist) Dump([]string) string {
 	return fmt.Sprintf("%+v", w)
 }

@@ -52,7 +52,7 @@ func NewAddrDatas() *AddrDatas {
 	}
 }
 
-// Data(addr) fetches data associated with an address.
+// Data fetches data associated with an address.
 // data, ok := ads.Data(addr)
 // behaves similarly to
 // value, ok := map[key]
@@ -111,10 +111,10 @@ func (a *AddrDatas) SetData(ar AddrRange, data interface{}) {
 	newLen := len(a.ads) - count + 1
 	if count > 0 {
 		if a.ads[first].addr < ad.addr {
-			newLen += 1
+			newLen++
 		}
 		if a.ads[last].EndAddr() > ad.EndAddr() {
-			newLen += 1
+			newLen++
 		}
 	}
 	newAds := make([]*AddrData, 0, newLen)
@@ -162,6 +162,8 @@ func (a *AddrDatas) SetData(ar AddrRange, data interface{}) {
 	a.ads = newAds
 }
 
+// Sorted returns a new slice of AddrData instances sorted based on the provided 'less' function.
+// It does not modify the original AddrDatas; instead, it returns a sorted shallow copy.
 func (a *AddrDatas) Sorted(less func(ad0, ad1 *AddrData) bool) []*AddrData {
 	shallowCopyOfAds := make([]*AddrData, len(a.ads))
 	copy(shallowCopyOfAds, a.ads)
@@ -181,7 +183,7 @@ func (a *AddrDatas) overlapping(ar0 *AddrRange) (int, int) {
 		if ar0EndAddr <= ad.addr {
 			break
 		}
-		count += 1
+		count++
 	}
 	return first, count
 }

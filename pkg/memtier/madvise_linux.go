@@ -26,6 +26,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// PidfdOpenSyscall is a wrapper around the pidfd_open system call.
+// It opens a process file descriptor (pidfd) for the specified process ID with the given flags.
 func PidfdOpenSyscall(pid int, flags uint) (int, error) {
 	var err error
 	// syscall:
@@ -37,6 +39,8 @@ func PidfdOpenSyscall(pid int, flags uint) (int, error) {
 	return int(ret), err
 }
 
+// PidfdCloseSyscall is a wrapper around the close system call for a process file descriptor (pidfd).
+// It closes the specified process file descriptor.
 func PidfdCloseSyscall(pidfd int) error {
 	return unix.Close(pidfd)
 }
@@ -46,6 +50,8 @@ type cIovec struct {
 	iovLen  C.size_t
 }
 
+// ProcessMadviseSyscall is a wrapper around the process_madvise system call.
+// It advises the kernel about memory usage patterns of the specified process address ranges.
 func ProcessMadviseSyscall(pidfd int, ranges []AddrRange, advise int, flags uint) (int, syscall.Errno, error) {
 
 	// syscall:

@@ -22,6 +22,7 @@ import (
 	"time"
 )
 
+// PolicyHeatConfig represents the configuration for the heat policy.
 type PolicyHeatConfig struct {
 	PidWatcher PidWatcherConfig
 	Tracker    TrackerConfig
@@ -54,6 +55,9 @@ type PolicyHeatConfig struct {
 	NumaSize map[int]string
 }
 
+// PolicyHeat represents all the elements involved in the heat policy, including
+// the configuration, pid watchers, heat map information, pid and the address
+// ranges, mover, heat forecaster information and so on.
 type PolicyHeat struct {
 	config       *PolicyHeatConfig
 	pidwatcher   PidWatcher
@@ -72,13 +76,14 @@ type pageInfo struct {
 }
 
 const (
-	constNUMASIZE_UNLIMITED = -1
+	constNumaSizeUnlimited = -1
 )
 
 func init() {
 	PolicyRegister("heat", NewPolicyHeat)
 }
 
+// NewPolicyHeat creates a new instance of PolicyHeat.
 func NewPolicyHeat() (Policy, error) {
 	p := &PolicyHeat{
 		heatmap:      NewCounterHeatmap(),
@@ -90,14 +95,16 @@ func NewPolicyHeat() (Policy, error) {
 	return p, nil
 }
 
-func (p *PolicyHeat) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration of the heat policy using JSON input.
+func (p *PolicyHeat) SetConfigJSON(configJSON string) error {
 	config := &PolicyHeatConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	return p.SetConfig(config)
 }
 
+// SetConfig sets the configuration of the heat policy.
 func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 	if config.IntervalMs <= 0 {
 		return fmt.Errorf("invalid heat policy IntervalMs: %d, > 0 expected", config.IntervalMs)
@@ -115,7 +122,7 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 	if err != nil {
 		return err
 	}
-	if err = newPidWatcher.SetConfigJson(config.PidWatcher.Config); err != nil {
+	if err = newPidWatcher.SetConfigJSON(config.PidWatcher.Config); err != nil {
 		return fmt.Errorf("configuring pidwatcher %q for the age policy failed: %w", config.PidWatcher.Name, err)
 	}
 
@@ -127,7 +134,7 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 		return err
 	}
 	if config.Tracker.Config != "" {
-		if err = newTracker.SetConfigJson(config.Tracker.Config); err != nil {
+		if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
 			return fmt.Errorf("configuring tracker %q for the heat policy failed: %s", config.Tracker.Name, err)
 		}
 	}
@@ -135,7 +142,7 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 	newNumaSize := make(map[Node]int)
 	for _, numas := range config.HeatNumas {
 		for _, nodeInt := range numas {
-			newNumaSize[Node(nodeInt)] = constNUMASIZE_UNLIMITED // the default is unlimited
+			newNumaSize[Node(nodeInt)] = constNumaSizeUnlimited // the default is unlimited
 		}
 	}
 	for nodeInt, sizeString := range config.NumaSize {
@@ -158,7 +165,7 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 		if err != nil || p.forecaster == nil {
 			return fmt.Errorf("creating heat forecaster %q failed: %s", config.Forecaster.Name, err)
 		}
-		if err = p.forecaster.SetConfigJson(config.Forecaster.Config); err != nil {
+		if err = p.forecaster.SetConfigJSON(config.Forecaster.Config); err != nil {
 			return fmt.Errorf("configuring heat forecaster %q failed: %s", config.Forecaster.Name, err)
 		}
 	}
@@ -170,6 +177,7 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 	return nil
 }
 
+// switchToTracker stops the current tracker and switches to a new one.
 func (p *PolicyHeat) switchToTracker(newTracker Tracker) {
 	if p.tracker != nil {
 		p.tracker.Stop()
@@ -177,13 +185,14 @@ func (p *PolicyHeat) switchToTracker(newTracker Tracker) {
 	p.tracker = newTracker
 }
 
-func (p *PolicyHeat) GetConfigJson() string {
+// GetConfigJSON gets the JSON representation of the current configuration.
+func (p *PolicyHeat) GetConfigJSON() string {
 	if p.config == nil {
 		return ""
 	}
 	pconfig := *p.config
 	if p.tracker != nil {
-		pconfig.Tracker.Config = p.tracker.GetConfigJson()
+		pconfig.Tracker.Config = p.tracker.GetConfigJSON()
 	}
 	if configStr, err := json.Marshal(&pconfig); err == nil {
 		return string(configStr)
@@ -191,18 +200,22 @@ func (p *PolicyHeat) GetConfigJson() string {
 	return ""
 }
 
+// PidWatcher returns the PidWatcher associated with the policy.
 func (p *PolicyHeat) PidWatcher() PidWatcher {
 	return p.pidwatcher
 }
 
+// Mover returns the Mover associated with the policy.
 func (p *PolicyHeat) Mover() *Mover {
 	return p.mover
 }
 
+// Tracker returns the Tracker associated with the policy.
 func (p *PolicyHeat) Tracker() Tracker {
 	return p.tracker
 }
 
+// Dump provides information about the policy based on the specified arguments.
 func (p *PolicyHeat) Dump(args []string) string {
 	dumpHelp := "dump <forecast [PARAMS]|heatmap|heatgram [CLASSES]|numa>"
 	if len(args) == 0 {
@@ -243,7 +256,7 @@ func (p *PolicyHeat) Dump(args []string) string {
 				if hr.heat > pidMaxHeat[pid] {
 					pidMaxHeat[pid] = hr.heat
 				}
-				hrCount += 1
+				hrCount++
 				pageCount += hr.length
 				return 0
 			})
@@ -304,6 +317,7 @@ func (p *PolicyHeat) Dump(args []string) string {
 	return dumpHelp
 }
 
+// Stop stops the policy and associated components.
 func (p *PolicyHeat) Stop() {
 	if p.pidwatcher != nil {
 		p.pidwatcher.Stop()
@@ -319,6 +333,7 @@ func (p *PolicyHeat) Stop() {
 	}
 }
 
+// Start starts the policy, including the main loop for periodic actions.
 func (p *PolicyHeat) Start() error {
 	if p.chLoop != nil {
 		return fmt.Errorf("already started")
@@ -352,6 +367,7 @@ func (p *PolicyHeat) Start() error {
 	return nil
 }
 
+// loop is the main loop of the heat policy, responsible for periodic actions.
 func (p *PolicyHeat) loop() {
 	log.Debugf("PolicyHeat: online\n")
 	defer log.Debugf("PolicyHeat: offline\n")
@@ -389,7 +405,7 @@ func (p *PolicyHeat) loop() {
 			stats.Store(StatsHeartbeat{"rollback from forecast"})
 			p.heatmap.pidHrs = realHeats
 		}
-		n += 1
+		n++
 		select {
 		case <-p.chLoop:
 			quit = true
@@ -417,7 +433,7 @@ func (p *PolicyHeat) updatePagedOutLocations(timestamp int64) {
 	for pid, addrDatas := range p.pidAddrDatas {
 		addrDatas.ForEach(func(ar *AddrRange, data interface{}) int {
 			arpi := data.(pageInfo)
-			if arpi.node == NODE_SWAP {
+			if arpi.node == NodeSwap {
 				checkPidArs[pid] = append(checkPidArs[pid], ar)
 			}
 			return 0
@@ -434,7 +450,7 @@ func (p *PolicyHeat) updatePagedOutLocations(timestamp int64) {
 					if (pmBits>>PMB_SWAP)&1 == 1 {
 						return 0 // swapped out as expected
 					}
-					p.pidAddrDatas[pid].SetData(*ar, pageInfo{node: NODE_UNDEFINED})
+					p.pidAddrDatas[pid].SetData(*ar, pageInfo{node: NodeUndefined})
 					return -1
 				})
 		}
@@ -442,6 +458,7 @@ func (p *PolicyHeat) updatePagedOutLocations(timestamp int64) {
 	}
 }
 
+// startMoves initiates memory moves based on heat information.
 func (p *PolicyHeat) startMoves(timestamp int64) {
 	if len(p.numaSize) == 0 {
 		p.startMovesNoLimits(timestamp)
@@ -450,6 +467,7 @@ func (p *PolicyHeat) startMoves(timestamp int64) {
 	}
 }
 
+// startMovesFillFastFree initiates memory moves for cases without specified limits.
 func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 	moverTasks := 0
 	for _, pid := range p.heatmap.Pids() {
@@ -461,7 +479,7 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 			return false
 		})
 		for _, hr := range hrHotToCold {
-			currNode := NODE_UNDEFINED
+			currNode := NodeUndefined
 			heatClass := p.heatmap.HeatClass(hr)
 			numas, ok := p.config.HeatNumas[heatClass]
 			if !ok || len(numas) == 0 {
@@ -483,7 +501,7 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 				addrInfo, _ := addrData.(pageInfo)
 				currNode = addrInfo.node
 			}
-			if currNode == NODE_UNDEFINED {
+			if currNode == NodeUndefined {
 				pagesOnUnknownNode = true
 			}
 			var ppages *Pages = nil
@@ -497,7 +515,7 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 				}
 				firstPageAddress := uint64(0)
 				prevPageAddress := uint64(0)
-				prevPageNode := NODE_UNDEFINED
+				prevPageNode := NodeUndefined
 				node := prevPageNode
 				nodeInts, err := ppages.status()
 				if err != nil {
@@ -532,19 +550,19 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 				// Already on a good node, do nothing.
 				continue
 			}
-			if currNode == NODE_UNDEFINED {
+			if currNode == NodeUndefined {
 				// Failed to find out where the pages are.
 				continue
 			}
 			// We know pages are on a wrong node. Choose
 			// new node with largest free space for the
 			// pages. TODO: filter mems_allowed from numas
-			destNode := NODE_UNDEFINED
+			destNode := NodeUndefined
 			destFree := -1
 			for _, candNodeInt := range numas {
 				candNode := Node(candNodeInt)
 				candFree := 0
-				if p.numaSize[candNode] != constNUMASIZE_UNLIMITED {
+				if p.numaSize[candNode] != constNumaSizeUnlimited {
 					candFree = p.numaSize[candNode] - p.numaUsed[candNode] - int(hr.length)
 				}
 				if candFree > destFree {
@@ -552,13 +570,13 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 					destFree = candFree
 				}
 			}
-			if destNode == NODE_UNDEFINED {
+			if destNode == NodeUndefined {
 				// Failed to find proper destination node.
 				continue
 			}
 			// Is there enough free space for pages of
 			// this heat range?
-			if p.numaSize[destNode] != constNUMASIZE_UNLIMITED && destFree < int(hr.length) {
+			if p.numaSize[destNode] != constNumaSizeUnlimited && destFree < int(hr.length) {
 				// Failed to find a destination node with enough quota.
 				continue
 			}
@@ -573,7 +591,7 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 				// The address range contains no pages that could be moved.
 				continue
 			}
-			moverTasks += 1
+			moverTasks++
 			task := NewMoverTask(ppages, destNode)
 			p.mover.AddTask(task)
 			addrDatas.SetData(hr.AddrRange(), pageInfo{node: destNode})
@@ -585,6 +603,7 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 	}
 }
 
+// startMovesNoLimits initiates memory moves without specified limits.
 func (p *PolicyHeat) startMovesNoLimits(timestamp int64) {
 	moverTasks := 0
 	for _, pid := range p.heatmap.Pids() {
@@ -616,7 +635,7 @@ func (p *PolicyHeat) startMovesNoLimits(timestamp int64) {
 			if len(ppages.pages) == 0 {
 				return 0
 			}
-			moverTasks += 1
+			moverTasks++
 			task := NewMoverTask(ppages, destNode)
 			p.mover.AddTask(task)
 			return 0

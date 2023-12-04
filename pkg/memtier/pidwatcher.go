@@ -19,14 +19,16 @@ import (
 	"sort"
 )
 
+// PidWatcherConfig represents the configuration for a PID watcher.
 type PidWatcherConfig struct {
 	Name   string
 	Config string
 }
 
+// PidWatcher is an interface for managing PID watchers.
 type PidWatcher interface {
-	SetConfigJson(string) error // Set new configuration.
-	GetConfigJson() string      // Get current configuration.
+	SetConfigJSON(string) error // Set new configuration.
+	GetConfigJSON() string      // Get current configuration.
 	SetPidListener(PidListener)
 	Poll() error
 	Start() error
@@ -34,20 +36,24 @@ type PidWatcher interface {
 	Dump([]string) string
 }
 
+// PidListener is an interface for handling PID events.
 type PidListener interface {
 	AddPids([]int)
 	RemovePids([]int)
 }
 
+// PidWatcherCreator is a function type for creating a new PID watcher instance.
 type PidWatcherCreator func() (PidWatcher, error)
 
-// pidwatchers is a map of pidwatcher name -> pidwatcher creator
+// pidwatchers is a map of pidwatcher name -> pidwatcher creator.
 var pidwatchers map[string]PidWatcherCreator = make(map[string]PidWatcherCreator, 0)
 
+// PidWatcherRegister registers a new PID watcher with a given name and creator function.
 func PidWatcherRegister(name string, creator PidWatcherCreator) {
 	pidwatchers[name] = creator
 }
 
+// PidWatcherList returns a sorted list of available PID watcher names.
 func PidWatcherList() []string {
 	keys := make([]string, 0, len(pidwatchers))
 	for key := range pidwatchers {
@@ -57,6 +63,7 @@ func PidWatcherList() []string {
 	return keys
 }
 
+// NewPidWatcher creates a new PID watcher instance based on the provided name.
 func NewPidWatcher(name string) (PidWatcher, error) {
 	if creator, ok := pidwatchers[name]; ok {
 		return creator()

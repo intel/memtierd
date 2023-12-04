@@ -26,6 +26,7 @@ import (
 	"time"
 )
 
+// TrackerSoftDirtyConfig represents the configuration for TrackerSoftDirty.
 type TrackerSoftDirtyConfig struct {
 	// PagesInRegion is the number of pages in every address range
 	// that is being watched and moved from a NUMA node to another.
@@ -66,6 +67,7 @@ type accessCounter struct {
 	w uint64 // number of times pages getting written
 }
 
+// TrackerSoftDirty is a memory tracker that detects memory writes.
 type TrackerSoftDirty struct {
 	mutex        sync.Mutex
 	regionsMutex sync.Mutex
@@ -81,6 +83,7 @@ func init() {
 	TrackerRegister("softdirty", NewTrackerSoftDirty)
 }
 
+// NewTrackerSoftDirty creates a new instance of TrackerSoftDirty.
 func NewTrackerSoftDirty() (Tracker, error) {
 	if !procFileExists("/proc/self/clear_refs") {
 		return nil, fmt.Errorf("no platform support: /proc/pid/clear_refs missing")
@@ -89,23 +92,25 @@ func NewTrackerSoftDirty() (Tracker, error) {
 		regions:  make(map[int][]*AddrRanges),
 		accesses: make(map[int]map[uint64]map[uint64]*accessCounter),
 	}
-	err := t.SetConfigJson(trackerSoftDirtyDefaults)
+	err := t.SetConfigJSON(trackerSoftDirtyDefaults)
 	if err != nil {
 		return nil, fmt.Errorf("invalid softdirty default configuration")
 	}
 	return t, nil
 }
 
-func (t *TrackerSoftDirty) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration for TrackerSoftDirty from a JSON string.
+func (t *TrackerSoftDirty) SetConfigJSON(configJSON string) error {
 	config := &TrackerSoftDirtyConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	t.config = config
 	return nil
 }
 
-func (t *TrackerSoftDirty) GetConfigJson() string {
+// GetConfigJSON returns the JSON representation of the TrackerSoftDirty's configuration.
+func (t *TrackerSoftDirty) GetConfigJSON() string {
 	if t.config == nil {
 		return ""
 	}
@@ -134,6 +139,7 @@ func (t *TrackerSoftDirty) addRanges(pid int) {
 	}
 }
 
+// AddPids adds PIDs to the TrackerSoftDirty's regions map.
 func (t *TrackerSoftDirty) AddPids(pids []int) {
 	log.Debugf("TrackerSoftDirty: AddPids(%v)\n", pids)
 	for _, pid := range pids {
@@ -141,6 +147,7 @@ func (t *TrackerSoftDirty) AddPids(pids []int) {
 	}
 }
 
+// RemovePids removes PIDs from the TrackerSoftDirty's regions map.
 func (t *TrackerSoftDirty) RemovePids(pids []int) {
 	log.Debugf("TrackerSoftDirty: RemovePids(%v)\n", pids)
 	if pids == nil {
@@ -163,12 +170,14 @@ func (t *TrackerSoftDirty) removePid(pid int) {
 	t.mutex.Unlock()
 }
 
+// ResetCounters resets the counters that TrackerSoftDirty uses to track memory accesses.
 func (t *TrackerSoftDirty) ResetCounters() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.accesses = make(map[int]map[uint64]map[uint64]*accessCounter)
 }
 
+// GetCounters returns the counters tracked by TrackerSoftDirty.
 func (t *TrackerSoftDirty) GetCounters() *TrackerCounters {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -198,6 +207,7 @@ func (t *TrackerSoftDirty) GetCounters() *TrackerCounters {
 	return tcs
 }
 
+// Start starts the TrackerSoftDirty's sampler.
 func (t *TrackerSoftDirty) Start() error {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -210,6 +220,7 @@ func (t *TrackerSoftDirty) Start() error {
 	return nil
 }
 
+// Stop stops the TrackerSoftDirty's sampler.
 func (t *TrackerSoftDirty) Stop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -284,9 +295,9 @@ func (t *TrackerSoftDirty) countPages() {
 	// It counts number of pages accessed and written in a region.
 	// The result is stored to cntPagesAccessed and cntPagesWritten.
 	pageHandler := func(pagemapBits uint64, pageAddr uint64) int {
-		totScanned += 1
+		totScanned++
 		if pagemapBits&PM_SOFT_DIRTY == PM_SOFT_DIRTY {
-			cntPagesWritten += 1
+			cntPagesWritten++
 		}
 		if trackReferenced {
 			pfn := pagemapBits & PM_PFN
@@ -295,7 +306,7 @@ func (t *TrackerSoftDirty) countPages() {
 				return -1
 			}
 			if flags&KPF_REFERENCED == KPF_REFERENCED {
-				cntPagesAccessed += 1
+				cntPagesAccessed++
 			}
 		}
 		// If we have exceeded the max count per region on the
@@ -311,7 +322,7 @@ func (t *TrackerSoftDirty) countPages() {
 			}
 			n := 0
 			for rand.Intn(1000) < skipPageProb {
-				n += 1
+				n++
 			}
 			return n
 		}
@@ -430,6 +441,7 @@ func (t *TrackerSoftDirty) clearPageBits() {
 	}
 }
 
+// Dump generates a dump based on the provided arguments.
 func (t *TrackerSoftDirty) Dump(args []string) string {
 	usage := "Usage: dump raw PARAMS"
 	if len(args) == 0 {

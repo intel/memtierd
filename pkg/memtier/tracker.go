@@ -21,13 +21,16 @@ import (
 	"sync"
 )
 
+// TrackerConfig holds the configuration for the memory tracker.
 type TrackerConfig struct {
 	Name   string
 	Config string
 }
 
+// TrackerCounters is a slice of TrackerCounter instances.
 type TrackerCounters []TrackerCounter
 
+// TrackerCounter holds counters for memory tracking.
 type TrackerCounter struct {
 	Accesses uint64
 	Reads    uint64
@@ -35,15 +38,17 @@ type TrackerCounter struct {
 	AR       *AddrRanges
 }
 
+// RangeHeat represents the heat (accesses + reads + writes) for a memory range.
 type RangeHeat struct {
 	Pid   int
 	Range AddrRange
 	Heat  uint64
 }
 
+// Tracker is an interface for memory tracking.
 type Tracker interface {
-	SetConfigJson(string) error // Set new configuration.
-	GetConfigJson() string      // Get current configuration.
+	SetConfigJSON(string) error // Set new configuration.
+	GetConfigJSON() string      // Get current configuration.
 	AddPids([]int)              // Add pids to be tracked.
 	RemovePids([]int)           // Remove pids, RemovePids(nil) clears all.
 	Start() error               // Start tracking.
@@ -68,15 +73,18 @@ type rawAccessEntries struct {
 	data  []*rawAccessEntry
 }
 
+// TrackerCreator is a function type to create a new Tracker instance.
 type TrackerCreator func() (Tracker, error)
 
-// trackers is a map of tracker name -> tracker creator
+// trackers is a map of tracker name -> tracker creator.
 var trackers map[string]TrackerCreator = make(map[string]TrackerCreator, 0)
 
+// TrackerRegister registers a new Tracker with a given name and creator function.
 func TrackerRegister(name string, creator TrackerCreator) {
 	trackers[name] = creator
 }
 
+// TrackerList returns a list of registered tracker names.
 func TrackerList() []string {
 	keys := make([]string, 0, len(trackers))
 	for key := range trackers {
@@ -86,6 +94,7 @@ func TrackerList() []string {
 	return keys
 }
 
+// NewTracker creates a new Tracker instance based on the provided name.
 func NewTracker(name string) (Tracker, error) {
 	if creator, ok := trackers[name]; ok {
 		return creator()
@@ -139,6 +148,7 @@ func raeDataToString(raeData []*rawAccessEntry) string {
 	return strings.Join(lines, "\n")
 }
 
+// SortByAccesses sorts TrackerCounters by the number of accesses.
 func (tcs *TrackerCounters) SortByAccesses() {
 	sort.Slice(*tcs, func(i, j int) bool {
 		return (*tcs)[i].Accesses < (*tcs)[j].Accesses ||
@@ -147,6 +157,7 @@ func (tcs *TrackerCounters) SortByAccesses() {
 	})
 }
 
+// SortByAddr sorts TrackerCounters by memory address.
 func (tcs *TrackerCounters) SortByAddr() {
 	sort.Slice(*tcs, func(i, j int) bool {
 		return (*tcs)[i].AR.Pid() < (*tcs)[j].AR.Pid() ||
@@ -155,6 +166,7 @@ func (tcs *TrackerCounters) SortByAddr() {
 	})
 }
 
+// String converts TrackerCounters to a string representation.
 func (tcs *TrackerCounters) String() string {
 	lines := make([]string, 0, len(*tcs))
 	for _, tc := range *tcs {
@@ -281,6 +293,7 @@ func (tcs *TrackerCounters) Flattened(cut func(tc0 TrackerCounter, ar *AddrRange
 	return &flatTcs
 }
 
+// RegionsMerged returns TrackerCounters with merged memory regions.
 func (tcs *TrackerCounters) RegionsMerged() *TrackerCounters {
 	tcs.SortByAddr()
 	mergedTcs := &TrackerCounters{}
@@ -309,6 +322,7 @@ func (tcs *TrackerCounters) RegionsMerged() *TrackerCounters {
 	return mergedTcs
 }
 
+// RangeHeat returns RangeHeat data for TrackerCounters.
 func (tcs *TrackerCounters) RangeHeat() []*RangeHeat {
 	tcs.SortByAddr()
 	rhs := []*RangeHeat{}

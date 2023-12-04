@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// MoverConfig represents the configuration for memory movement tasks.
 type MoverConfig struct {
 	// IntervalMs is the minimum interval between subsequent moves
 	// in milliseconds
@@ -15,14 +16,17 @@ type MoverConfig struct {
 	Bandwidth int
 }
 
+// moverDefaults represents the default configuration for memory movement tasks.
 const moverDefaults string = "{\"IntervalMs\":10,\"Bandwidth\":100}"
 
+// MoverTask represents a single memory movement task.
 type MoverTask struct {
 	pages  *Pages
 	to     []Node
 	offset int // index to the first page that is still to be moved
 }
 
+// Mover represents the memory mover, which manages and executes memory movement tasks.
 type Mover struct {
 	mutex         sync.Mutex
 	running       bool
@@ -32,8 +36,10 @@ type Mover struct {
 	// channel for new tasks and (re)configuring
 }
 
+// taskHandlerCmd represents commands for the task handler.
 type taskHandlerCmd int
 
+// taskStatus represents the status of a memory movement task.
 type taskStatus int
 
 const (
@@ -49,12 +55,14 @@ const (
 	tsError
 )
 
+// NewMover creates a new instance of the Mover.
 func NewMover() *Mover {
 	return &Mover{
 		toTaskHandler: make(chan taskHandlerCmd, 8),
 	}
 }
 
+// NewMoverTask creates a new memory movement task.
 func NewMoverTask(pages *Pages, toNode Node) *MoverTask {
 	return &MoverTask{
 		pages: pages,
@@ -62,6 +70,7 @@ func NewMoverTask(pages *Pages, toNode Node) *MoverTask {
 	}
 }
 
+// String returns a string representation of the MoverTask.
 func (mt *MoverTask) String() string {
 	pid := mt.pages.Pid()
 	p := mt.pages.Pages()
@@ -72,14 +81,16 @@ func (mt *MoverTask) String() string {
 	return fmt.Sprintf("MoverTask{pid: %d, next: %s, page: %d out of %d, dest: %v}", pid, nextAddr, mt.offset, len(p), mt.to)
 }
 
-func (m *Mover) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration of the Mover from a JSON string.
+func (m *Mover) SetConfigJSON(configJSON string) error {
 	var config MoverConfig
-	if err := unmarshal(configJson, &config); err != nil {
+	if err := unmarshal(configJSON, &config); err != nil {
 		return err
 	}
 	return m.SetConfig(&config)
 }
 
+// SetConfig sets the configuration of the Mover.
 func (m *Mover) SetConfig(config *MoverConfig) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -87,7 +98,8 @@ func (m *Mover) SetConfig(config *MoverConfig) error {
 	return nil
 }
 
-func (m *Mover) GetConfigJson() string {
+// GetConfigJSON gets the current configuration of the Mover as a JSON string.
+func (m *Mover) GetConfigJSON() string {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if m.config == nil {
@@ -99,11 +111,12 @@ func (m *Mover) GetConfigJson() string {
 	return ""
 }
 
+// Start starts the Mover with the specified configuration.
 func (m *Mover) Start() error {
 	m.mutex.Lock()
 	if m.config == nil {
 		m.mutex.Unlock()
-		if err := m.SetConfigJson(moverDefaults); err != nil {
+		if err := m.SetConfigJSON(moverDefaults); err != nil {
 			return fmt.Errorf("start failed on default configuration error: %w", err)
 		}
 		m.mutex.Lock()
@@ -116,6 +129,7 @@ func (m *Mover) Start() error {
 	return nil
 }
 
+// Stop stops the Mover.
 func (m *Mover) Stop() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -125,14 +139,17 @@ func (m *Mover) Stop() {
 	}
 }
 
+// Pause pauses the Mover.
 func (m *Mover) Pause() {
 	m.toTaskHandler <- thPause
 }
 
+// Continue resumes the Mover.
 func (m *Mover) Continue() {
 	m.toTaskHandler <- thContinue
 }
 
+// Tasks returns a copy of the current list of memory movement tasks.
 func (m *Mover) Tasks() []*MoverTask {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -144,6 +161,7 @@ func (m *Mover) Tasks() []*MoverTask {
 	return tasks
 }
 
+// AddTask adds a new memory movement task to the Mover.
 func (m *Mover) AddTask(task *MoverTask) {
 	stats.Store(StatsHeartbeat{"mover.AddTask"})
 	m.mutex.Lock()
@@ -152,15 +170,17 @@ func (m *Mover) AddTask(task *MoverTask) {
 	m.toTaskHandler <- thContinue
 }
 
-func (m *Mover) RemoveTask(taskId int) {
+// RemoveTask removes a memory movement task from the Mover.
+func (m *Mover) RemoveTask(taskID int) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	if taskId < 0 || taskId >= len(m.tasks) {
+	if taskID < 0 || taskID >= len(m.tasks) {
 		return
 	}
-	m.tasks = append(m.tasks[0:taskId], m.tasks[taskId+1:]...)
+	m.tasks = append(m.tasks[0:taskID], m.tasks[taskID+1:]...)
 }
 
+// taskHandler is a goroutine that handles memory movement tasks.
 func (m *Mover) taskHandler() {
 	log.Debugf("Mover: online\n")
 	defer func() {
@@ -207,6 +227,7 @@ func (m *Mover) taskHandler() {
 	}
 }
 
+// handleTask processes a memory movement task and returns its status.
 func (m *Mover) handleTask(task *MoverTask, intervalMs, bandwidth int) taskStatus {
 	pp := task.pages
 	if task.offset > 0 {
@@ -229,7 +250,7 @@ func (m *Mover) handleTask(task *MoverTask, intervalMs, bandwidth int) taskStatu
 		return tsBlocked
 	}
 	switch toNode {
-	case NODE_SWAP:
+	case NodeSwap:
 		if err := pp.SwapOut(count); err != nil {
 			return tsError
 		}
@@ -245,12 +266,14 @@ func (m *Mover) handleTask(task *MoverTask, intervalMs, bandwidth int) taskStatu
 	return tsDone
 }
 
+// TaskCount returns the number of memory movement tasks in the Mover.
 func (m *Mover) TaskCount() int {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return len(m.tasks)
 }
 
+// popTask pops a memory movement task from the task list.
 func (m *Mover) popTask() (*MoverTask, int, int) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
