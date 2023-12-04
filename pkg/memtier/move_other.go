@@ -17,6 +17,8 @@
 
 package memtier
 
+// MovePagesSyscall is a placeholder function for systems other than Linux where the move_pages system call is not supported.
+// It panics with a message indicating that the function is not implemented on this platform.
 func MovePagesSyscall(pid int, count uint, pages []uintptr, nodes []int, flags int) (uint, []int, error) {
 	panic("MovePagesSyscall not implemented on this platform")
 }

@@ -18,18 +18,22 @@ import (
 	"fmt"
 )
 
+// Node represents a numa node.
 type Node int
 
 const (
-	NODE_UNDEFINED = Node(1 << 31)
-	NODE_SWAP      = Node(-1)
+	// NodeUndefined is used when moving memory among numa nodes.
+	NodeUndefined = Node(1 << 31)
+	// NodeSwap is used when swapping in and out.
+	NodeSwap = Node(-1)
 )
 
+// String returns a string representation of the numa Node.
 func (node Node) String() string {
 	switch node {
-	case NODE_UNDEFINED:
+	case NodeUndefined:
 		return "<undefined>"
-	case NODE_SWAP:
+	case NodeSwap:
 		return "swap"
 	default:
 		return fmt.Sprintf("node%d", node)

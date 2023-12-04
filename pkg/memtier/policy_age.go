@@ -23,6 +23,7 @@ import (
 	"time"
 )
 
+// PolicyAgeConfig holds the configuration for the age policy.
 type PolicyAgeConfig struct {
 	PidWatcher PidWatcherConfig
 	Tracker    TrackerConfig
@@ -61,6 +62,7 @@ type PolicyAgeConfig struct {
 	ActiveNumas []int
 }
 
+// PolicyAge is a type implementing the Policy interface for the age policy.
 type PolicyAge struct {
 	config     *PolicyAgeConfig
 	pidwatcher PidWatcher
@@ -83,6 +85,7 @@ func init() {
 	PolicyRegister("age", NewPolicyAge)
 }
 
+// NewPolicyAge creates a new instance of the age policy.
 func NewPolicyAge() (Policy, error) {
 	p := &PolicyAge{
 		mover: NewMover(),
@@ -90,14 +93,16 @@ func NewPolicyAge() (Policy, error) {
 	return p, nil
 }
 
-func (p *PolicyAge) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the policy configuration based on JSON input.
+func (p *PolicyAge) SetConfigJSON(configJSON string) error {
 	config := &PolicyAgeConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	return p.SetConfig(config)
 }
 
+// SetConfig checks the validity of the configuration and sets the policy configuration.
 func (p *PolicyAge) SetConfig(config *PolicyAgeConfig) error {
 	if config.IntervalMs <= 0 {
 		return fmt.Errorf("invalid age policy IntervalMs: %d, > 0 expected", config.IntervalMs)
@@ -124,7 +129,7 @@ func (p *PolicyAge) SetConfig(config *PolicyAgeConfig) error {
 	if err != nil {
 		return err
 	}
-	if err = newPidWatcher.SetConfigJson(config.PidWatcher.Config); err != nil {
+	if err = newPidWatcher.SetConfigJSON(config.PidWatcher.Config); err != nil {
 		return fmt.Errorf("configuring pidwatcher %q for the age policy failed: %w", config.PidWatcher.Name, err)
 	}
 
@@ -136,7 +141,7 @@ func (p *PolicyAge) SetConfig(config *PolicyAgeConfig) error {
 		return err
 	}
 	if config.Tracker.Config != "" {
-		if err = newTracker.SetConfigJson(config.Tracker.Config); err != nil {
+		if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
 			return fmt.Errorf("configuring tracker %q for the age policy failed: %s", config.Tracker.Name, err)
 		}
 	}
@@ -149,6 +154,7 @@ func (p *PolicyAge) SetConfig(config *PolicyAgeConfig) error {
 	return nil
 }
 
+// switchToTracker stops the current tracker and initiates a new tracker.
 func (p *PolicyAge) switchToTracker(newTracker Tracker) {
 	if p.tracker != nil {
 		p.tracker.Stop()
@@ -156,13 +162,14 @@ func (p *PolicyAge) switchToTracker(newTracker Tracker) {
 	p.tracker = newTracker
 }
 
-func (p *PolicyAge) GetConfigJson() string {
+// GetConfigJSON gets the policy configuration in JSON format.
+func (p *PolicyAge) GetConfigJSON() string {
 	if p.config == nil {
 		return ""
 	}
 	pconfig := *p.config
 	if p.tracker != nil {
-		pconfig.Tracker.Config = p.tracker.GetConfigJson()
+		pconfig.Tracker.Config = p.tracker.GetConfigJSON()
 	}
 	if configStr, err := json.Marshal(&pconfig); err == nil {
 		return string(configStr)
@@ -170,18 +177,22 @@ func (p *PolicyAge) GetConfigJson() string {
 	return ""
 }
 
+// PidWatcher returns the associated PidWatcher.
 func (p *PolicyAge) PidWatcher() PidWatcher {
 	return p.pidwatcher
 }
 
+// Mover returns the associated Mover.
 func (p *PolicyAge) Mover() *Mover {
 	return p.mover
 }
 
+// Tracker returns the associated Tracker.
 func (p *PolicyAge) Tracker() Tracker {
 	return p.tracker
 }
 
+// Dump generates a string representation of the policy based on specified arguments.
 func (p *PolicyAge) Dump(args []string) string {
 	dumpHelp := `dump accessed TIMESPEC,TIMESPEC[,TIMESPEC]... [PID[,PID]]
         Examples:
@@ -271,6 +282,7 @@ func (p *PolicyAge) Dump(args []string) string {
 	return strings.Join(lines, "\n")
 }
 
+// Stop stops the policy and associated components.
 func (p *PolicyAge) Stop() {
 	if p.pidwatcher != nil {
 		p.pidwatcher.Stop()
@@ -286,6 +298,7 @@ func (p *PolicyAge) Stop() {
 	}
 }
 
+// Start starts the policy and associated components.
 func (p *PolicyAge) Start() error {
 	if p.cgLoop != nil {
 		return fmt.Errorf("already started")
@@ -465,7 +478,7 @@ func (p *PolicyAge) loop() {
 			for _, tc := range *sotcs {
 				log.Debugf("%d ms swapout: %s\n", p.config.SwapOutMs, tc.AR.Ranges()[0])
 			}
-			p.move(sotcs, NODE_SWAP)
+			p.move(sotcs, NodeSwap)
 		}
 		if p.config.IdleDurationMs > 0 && len(p.config.IdleNumas) > 0 {
 			// Moving idle pages is enabled.
@@ -488,7 +501,7 @@ func (p *PolicyAge) loop() {
 			// TODO: mask & choose valid NUMA node
 			p.move(atcs, Node(p.config.ActiveNumas[0]))
 		}
-		n += 1
+		n++
 		select {
 		case <-p.cgLoop:
 			quit = true

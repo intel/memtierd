@@ -20,6 +20,9 @@ import (
 	"strings"
 )
 
+// ParseBytes parses a string representation of bytes and returns the equivalent number of bytes.
+// It supports units like k, M, G, T (kilo, mega, giga, tera) and expects the input string
+// to be in the format of "<numeric part><unit>" (e.g., "10M" for 10 megabytes).
 func ParseBytes(s string) (int64, error) {
 	origS := s
 	factor := int64(1)
@@ -51,6 +54,8 @@ func ParseBytes(s string) (int64, error) {
 	return n * factor, nil
 }
 
+// MustParseBytes is a helper function that wraps ParseBytes and panics if an error occurs.
+// It is useful in situations where the input string is expected to be valid.
 func MustParseBytes(s string) int64 {
 	bytes, err := ParseBytes(s)
 	if err != nil {

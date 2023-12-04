@@ -27,11 +27,13 @@ import (
 	"time"
 )
 
+// PidWatcherCgroupsConfig holds the configuration for the Cgroups-based PID watcher.
 type PidWatcherCgroupsConfig struct {
 	IntervalMs int
 	Cgroups    []string // list of absolute cgroup directory paths
 }
 
+// PidWatcherCgroups is a type implementing the PidWatcher interface for Cgroups-based PID watching.
 type PidWatcherCgroups struct {
 	config       *PidWatcherCgroupsConfig
 	pidsReported map[int]setMemberType
@@ -44,6 +46,7 @@ func init() {
 	PidWatcherRegister("cgroups", NewPidWatcherCgroups)
 }
 
+// NewPidWatcherCgroups creates a new instance of the Cgroups-based PID watcher.
 func NewPidWatcherCgroups() (PidWatcher, error) {
 	w := &PidWatcherCgroups{
 		pidsReported: map[int]setMemberType{},
@@ -51,11 +54,12 @@ func NewPidWatcherCgroups() (PidWatcher, error) {
 	return w, nil
 }
 
-func (w *PidWatcherCgroups) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration for the Cgroups-based PID watcher.
+func (w *PidWatcherCgroups) SetConfigJSON(configJSON string) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	config := &PidWatcherCgroupsConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	if config.IntervalMs == 0 {
@@ -68,7 +72,8 @@ func (w *PidWatcherCgroups) SetConfigJson(configJson string) error {
 	return nil
 }
 
-func (w *PidWatcherCgroups) GetConfigJson() string {
+// GetConfigJSON gets the configuration for the Cgroups-based PID watcher in JSON format.
+func (w *PidWatcherCgroups) GetConfigJSON() string {
 	if w.config == nil {
 		return ""
 	}
@@ -78,10 +83,12 @@ func (w *PidWatcherCgroups) GetConfigJson() string {
 	return ""
 }
 
+// SetPidListener sets the listener for PID changes.
 func (w *PidWatcherCgroups) SetPidListener(l PidListener) {
 	w.pidListener = l
 }
 
+// Poll initiates a single polling operation for PID changes.
 func (w *PidWatcherCgroups) Poll() error {
 	w.mutex.Lock()
 	w.stop = false
@@ -90,6 +97,7 @@ func (w *PidWatcherCgroups) Poll() error {
 	return nil
 }
 
+// Start starts the PID watcher with periodic polling.
 func (w *PidWatcherCgroups) Start() error {
 	w.mutex.Lock()
 	w.stop = false
@@ -98,6 +106,7 @@ func (w *PidWatcherCgroups) Start() error {
 	return nil
 }
 
+// Stop stops the PID watcher.
 func (w *PidWatcherCgroups) Stop() {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
@@ -232,6 +241,7 @@ func findFiles(root string, filename string) []string {
 	return matchingFiles
 }
 
+// Dump generates a string representation of the Cgroups-based PID watcher for debugging purposes.
 func (w *PidWatcherCgroups) Dump([]string) string {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()

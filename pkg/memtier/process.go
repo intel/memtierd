@@ -14,15 +14,17 @@
 
 package memtier
 
+// Process represents a process with a unique process ID (pid).
 type Process struct {
 	pid int
 }
 
+// NewProcess creates a new Process instance with the specified process ID (pid).
 func NewProcess(pid int) *Process {
 	return &Process{pid}
 }
 
-// AddressRanges returns address ranges of the process
+// AddressRanges returns address ranges of the process.
 func (p *Process) AddressRanges() (*AddrRanges, error) {
 	ar, err := procMaps(p.pid)
 	if err != nil {

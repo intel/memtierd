@@ -19,29 +19,34 @@ import (
 	"sort"
 )
 
+// RoutineConfig holds the configuration for a routine.
 type RoutineConfig struct {
 	Name   string
 	Config string
 }
 
+// Routine is an interface for routines, which defines all the methods.
 type Routine interface {
-	SetConfigJson(string) error // Set new configuration.
-	GetConfigJson() string      // Get current configuration.
+	SetConfigJSON(string) error // Set new configuration.
+	GetConfigJSON() string      // Get current configuration.
 	SetPolicy(Policy) error     // Set a policy.
 	Start() error
 	Stop()
 	Dump(args []string) string
 }
 
+// RoutineCreator is a function type that creates a new instance of a routine.
 type RoutineCreator func() (Routine, error)
 
 // policies is a map of policy name -> policy creator
 var routines map[string]RoutineCreator = make(map[string]RoutineCreator, 0)
 
+// RoutineRegister registers a routine with its name and creator function.
 func RoutineRegister(name string, creator RoutineCreator) {
 	routines[name] = creator
 }
 
+// RoutineList returns a sorted list of registered routine names.
 func RoutineList() []string {
 	keys := make([]string, 0, len(routines))
 	for key := range routines {
@@ -51,6 +56,7 @@ func RoutineList() []string {
 	return keys
 }
 
+// NewRoutine creates a new instance of a routine based on its name.
 func NewRoutine(name string) (Routine, error) {
 	if creator, ok := routines[name]; ok {
 		return creator()

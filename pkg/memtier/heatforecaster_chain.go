@@ -18,31 +18,37 @@ import (
 	"encoding/json"
 )
 
+// HeatForecasterChainConfig represents the configuration for the HeatForecasterChain.
 type HeatForecasterChainConfig struct {
 	Forecasters []HeatForecasterConfig
 }
 
+// HeatForecasterChain represents a chain of heat forecasters.
 type HeatForecasterChain struct {
 	config      *HeatForecasterChainConfig
 	forecasters []HeatForecaster
 }
 
+// init registers the HeatForecasterChain implementation.
 func init() {
 	HeatForecasterRegister("chain", NewHeatForecasterChain)
 }
 
+// NewHeatForecasterChain creates a new instance of HeatForecasterChain.
 func NewHeatForecasterChain() (HeatForecaster, error) {
 	return &HeatForecasterChain{}, nil
 }
 
-func (hf *HeatForecasterChain) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration for the HeatForecasterChain from a JSON string.
+func (hf *HeatForecasterChain) SetConfigJSON(configJSON string) error {
 	config := &HeatForecasterChainConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	return hf.SetConfig(config)
 }
 
+// SetConfig sets the configuration for the HeatForecasterChain.
 func (hf *HeatForecasterChain) SetConfig(config *HeatForecasterChainConfig) error {
 	hf.forecasters = []HeatForecaster{}
 	for _, conf := range config.Forecasters {
@@ -50,7 +56,7 @@ func (hf *HeatForecasterChain) SetConfig(config *HeatForecasterChainConfig) erro
 		if err != nil {
 			return err
 		}
-		err = fc.SetConfigJson(conf.Config)
+		err = fc.SetConfigJSON(conf.Config)
 		if err != nil {
 			return err
 		}
@@ -60,7 +66,8 @@ func (hf *HeatForecasterChain) SetConfig(config *HeatForecasterChainConfig) erro
 	return nil
 }
 
-func (hf *HeatForecasterChain) GetConfigJson() string {
+// GetConfigJSON returns the JSON representation of the HeatForecasterChain's configuration.
+func (hf *HeatForecasterChain) GetConfigJSON() string {
 	configString, err := json.Marshal(hf.config)
 	if err != nil {
 		return ""
@@ -68,17 +75,19 @@ func (hf *HeatForecasterChain) GetConfigJson() string {
 	return string(configString)
 }
 
+// Forecast performs heat forecasting using the chain of forecasters.
 func (hf *HeatForecasterChain) Forecast(heats *Heats) (*Heats, error) {
-	last_non_nil_heats := heats
+	lastNonNilHeats := heats
 	for _, fc := range hf.forecasters {
-		forecasted_heats, _ := fc.Forecast(last_non_nil_heats)
-		if forecasted_heats != nil {
-			last_non_nil_heats = forecasted_heats
+		forecastedHeats, _ := fc.Forecast(lastNonNilHeats)
+		if forecastedHeats != nil {
+			lastNonNilHeats = forecastedHeats
 		}
 	}
-	return last_non_nil_heats, nil
+	return lastNonNilHeats, nil
 }
 
+// Dump returns a string representation of the HeatForecasterChain for debugging purposes.
 func (hf *HeatForecasterChain) Dump(args []string) string {
-	return "HeatForecasterChain{config=" + hf.GetConfigJson() + "}"
+	return "HeatForecasterChain{config=" + hf.GetConfigJSON() + "}"
 }

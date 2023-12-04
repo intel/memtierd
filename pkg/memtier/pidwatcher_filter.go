@@ -21,23 +21,27 @@ import (
 	"regexp"
 )
 
+// PidWatcherFilterConfig holds the configuration for PidWatcherFilter.
 type PidWatcherFilterConfig struct {
 	Source  PidWatcherConfig
 	Filters []*PidFilterConfig
 }
 
+// PidFilterConfig holds the configuration for a PidWatcherFilter filter.
 type PidFilterConfig struct {
 	Exclude               bool
 	ProcExeRegexp         string
 	compiledProcExeRegexp *regexp.Regexp
 }
 
+// PidWatcherFilter is an implementation of PidWatcher that filters PIDs based on configured rules.
 type PidWatcherFilter struct {
 	config      *PidWatcherFilterConfig
 	source      PidWatcher
 	pidListener PidListener
 }
 
+// FilteringPidListener is a listener for PidWatcherFilter that filters and forwards PID changes.
 type FilteringPidListener struct {
 	w         *PidWatcherFilter
 	addedPids map[int]setMemberType
@@ -47,20 +51,23 @@ func init() {
 	PidWatcherRegister("filter", NewPidWatcherFilter)
 }
 
+// NewPidWatcherFilter creates a new instance of PidWatcherFilter.
 func NewPidWatcherFilter() (PidWatcher, error) {
 	return &PidWatcherFilter{}, nil
 }
 
-func (w *PidWatcherFilter) SetConfigJson(configJson string) error {
+// SetConfigJSON is a method of PidWatcherFilter that sets the configuration from JSON.
+// It creates a new source PidWatcher based on the provided configuration.
+func (w *PidWatcherFilter) SetConfigJSON(configJSON string) error {
 	config := &PidWatcherFilterConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	newSource, err := NewPidWatcher(config.Source.Name)
 	if err != nil {
 		return fmt.Errorf("pidwatcher filter failed to create source: %w", err)
 	}
-	if err = newSource.SetConfigJson(config.Source.Config); err != nil {
+	if err = newSource.SetConfigJSON(config.Source.Config); err != nil {
 		return fmt.Errorf("configuring pidwatcher filter's source pidwatcher %q failed: %w", config.Source.Name, err)
 	}
 	// Validate filters.
@@ -85,7 +92,8 @@ func (w *PidWatcherFilter) SetConfigJson(configJson string) error {
 	return nil
 }
 
-func (w *PidWatcherFilter) GetConfigJson() string {
+// GetConfigJSON is a method of PidWatcherFilter that returns the current configuration as a JSON string.
+func (w *PidWatcherFilter) GetConfigJSON() string {
 	if w.config == nil {
 		return ""
 	}
@@ -95,10 +103,12 @@ func (w *PidWatcherFilter) GetConfigJson() string {
 	return ""
 }
 
+// SetPidListener is a method of PidWatcherFilter that sets the PidListener.
 func (w *PidWatcherFilter) SetPidListener(l PidListener) {
 	w.pidListener = l
 }
 
+// Poll is a method of PidWatcherFilter that triggers the polling process of the source PidWatcher.
 func (w *PidWatcherFilter) Poll() error {
 	if w.source == nil {
 		return fmt.Errorf("pidwatcher filter: poll: missing pid source")
@@ -106,6 +116,7 @@ func (w *PidWatcherFilter) Poll() error {
 	return w.source.Poll()
 }
 
+// Start is a method of PidWatcherFilter that starts the source PidWatcher.
 func (w *PidWatcherFilter) Start() error {
 	if w.source == nil {
 		return fmt.Errorf("pidwatcher filter: start: missing pid source")
@@ -113,6 +124,7 @@ func (w *PidWatcherFilter) Start() error {
 	return w.source.Start()
 }
 
+// Stop is a method of PidWatcherFilter that stops the source PidWatcher.
 func (w *PidWatcherFilter) Stop() {
 	if w.source == nil {
 		return
@@ -120,10 +132,12 @@ func (w *PidWatcherFilter) Stop() {
 	w.source.Stop()
 }
 
+// Dump is a method of PidWatcherFilter that returns a string representation of the current instance.
 func (w *PidWatcherFilter) Dump([]string) string {
 	return fmt.Sprintf("%+v", w)
 }
 
+// AddPids is a method of FilteringPidListener that filters and forwards new PIDs.
 func (f *FilteringPidListener) AddPids(pids []int) {
 	passedPids := []int{}
 	for _, pid := range pids {
@@ -151,6 +165,7 @@ func (f *FilteringPidListener) AddPids(pids []int) {
 	}
 }
 
+// RemovePids is a method of FilteringPidListener that filters and forwards disappeared PIDs.
 func (f *FilteringPidListener) RemovePids(pids []int) {
 	passedPids := []int{}
 	for _, pid := range pids {

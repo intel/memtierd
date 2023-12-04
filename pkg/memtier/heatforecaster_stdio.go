@@ -23,12 +23,15 @@ import (
 	"strings"
 )
 
+// HeatForecasterStdioConfig represents the configuration for HeatForecasterStdio,
+// containing the command to execute, stderr configuration, and retry count.
 type HeatForecasterStdioConfig struct {
 	Command []string
 	Stderr  string
 	Retry   int
 }
 
+// HeatForecasterStdio is a heat forecaster that communicates with an external process through standard I/O.
 type HeatForecasterStdio struct {
 	config  *HeatForecasterStdioConfig
 	process *exec.Cmd
@@ -38,22 +41,26 @@ type HeatForecasterStdio struct {
 	jsonout *json.Decoder
 }
 
+// init registers the HeatForecasterStdio implementation.
 func init() {
 	HeatForecasterRegister("stdio", NewHeatForecasterStdio)
 }
 
+// NewHeatForecasterStdio creates a new instance of HeatForecasterStdio.
 func NewHeatForecasterStdio() (HeatForecaster, error) {
 	return &HeatForecasterStdio{}, nil
 }
 
-func (hf *HeatForecasterStdio) SetConfigJson(configJson string) error {
+// SetConfigJSON sets the configuration for HeatForecasterStdio from a JSON string.
+func (hf *HeatForecasterStdio) SetConfigJSON(configJSON string) error {
 	config := &HeatForecasterStdioConfig{}
-	if err := unmarshal(configJson, config); err != nil {
+	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
 	return hf.SetConfig(config)
 }
 
+// SetConfig sets the configuration for HeatForecasterStdio.
 func (hf *HeatForecasterStdio) SetConfig(config *HeatForecasterStdioConfig) error {
 	if err := hf.startProcess(config); err != nil {
 		return err
@@ -62,7 +69,8 @@ func (hf *HeatForecasterStdio) SetConfig(config *HeatForecasterStdioConfig) erro
 	return nil
 }
 
-func (hf *HeatForecasterStdio) GetConfigJson() string {
+// GetConfigJSON returns the JSON representation of the HeatForecasterStdio's configuration.
+func (hf *HeatForecasterStdio) GetConfigJSON() string {
 	configString, err := json.Marshal(hf.config)
 	if err != nil {
 		return ""
@@ -70,6 +78,7 @@ func (hf *HeatForecasterStdio) GetConfigJson() string {
 	return string(configString)
 }
 
+// Forecast sends the current heats to the external process and receives forecasted heats in return.
 func (hf *HeatForecasterStdio) Forecast(heats *Heats) (*Heats, error) {
 	if heats == nil {
 		return nil, nil
@@ -85,6 +94,7 @@ func (hf *HeatForecasterStdio) Forecast(heats *Heats) (*Heats, error) {
 	return newHeats, nil
 }
 
+// startProcess initializes the external process based on the provided configuration.
 func (hf *HeatForecasterStdio) startProcess(config *HeatForecasterStdioConfig) error {
 	if len(config.Command) == 0 {
 		return fmt.Errorf("forecaster stdio: config 'Command' missing")
@@ -123,6 +133,7 @@ func (hf *HeatForecasterStdio) startProcess(config *HeatForecasterStdioConfig) e
 	return nil
 }
 
+// sendCurrentHeats sends the current heats to the external process with retry mechanism.
 func (hf *HeatForecasterStdio) sendCurrentHeats(heats *Heats, triesLeft int, marshaled []byte) error {
 	var err error
 	if triesLeft < 0 {
@@ -154,6 +165,7 @@ func (hf *HeatForecasterStdio) sendCurrentHeats(heats *Heats, triesLeft int, mar
 	return nil
 }
 
+// Dump returns a string representation of the HeatForecasterStdio for debugging purposes.
 func (hf *HeatForecasterStdio) Dump(args []string) string {
-	return "HeatForecasterStdio{config=" + hf.GetConfigJson() + "}"
+	return "HeatForecasterStdio{config=" + hf.GetConfigJSON() + "}"
 }

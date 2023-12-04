@@ -14,12 +14,15 @@
 
 package memtier
 
+// GlobalConfig represents global configurations for memtier.
 type GlobalConfig struct {
 	FormatTable GlobalFormatTableValue
 }
 
+// GlobalFormatTableValue represents the possible values for the format of global information display.
 type GlobalFormatTableValue int
 
+// Constants defining values for the format of global information display.
 const (
 	GlobalFormatTableText GlobalFormatTableValue = iota
 	GlobalFormatTableCsv
@@ -27,10 +30,12 @@ const (
 
 var globalConfig *GlobalConfig
 
+// GlobalSet sets the global configuration for the specified key with the provided value.
 func GlobalSet(configKey, configValue string) error {
 	return nil
 }
 
+// init initializes the package.
 func init() {
 	globalConfig = &GlobalConfig{
 		FormatTable: GlobalFormatTableText,

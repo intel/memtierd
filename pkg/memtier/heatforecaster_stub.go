@@ -14,6 +14,7 @@
 
 package memtier
 
+// HeatForecasterStub defines empty struct for the scenarios that there is no heat forecaster.
 type HeatForecasterStub struct {
 }
 
@@ -21,22 +22,27 @@ func init() {
 	HeatForecasterRegister("stub", NewHeatForecasterStub)
 }
 
+// NewHeatForecasterStub creates a new instance of HeatForecasterStub with default configuration.
 func NewHeatForecasterStub() (HeatForecaster, error) {
 	return &HeatForecasterStub{}, nil
 }
 
-func (hf *HeatForecasterStub) SetConfigJson(configJson string) error {
+// SetConfigJSON is a method of HeatForecasterStub, returns nil.
+func (hf *HeatForecasterStub) SetConfigJSON(configJSON string) error {
 	return nil
 }
 
-func (hf *HeatForecasterStub) GetConfigJson() string {
+// GetConfigJSON is a method of HeatForecasterStub, returns "".
+func (hf *HeatForecasterStub) GetConfigJSON() string {
 	return ""
 }
 
+// Forecast is a method of HeatForecasterStub, returns nil for the heats.
 func (hf *HeatForecasterStub) Forecast(*Heats) (*Heats, error) {
 	return nil, nil
 }
 
+// Dump is a method of HeatForecasterStub, returns "<HeatForecasterStub>".
 func (hf *HeatForecasterStub) Dump(args []string) string {
 	return "<HeatForecasterStub>"
 }
