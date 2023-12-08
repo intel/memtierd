@@ -287,100 +287,133 @@ func (p *Prompt) cmdArange(args []string) CommandStatus {
 }
 
 func (p *Prompt) cmdSwap(args []string) CommandStatus {
-	pid := p.f.Int("pid", -1, "look for pages of PID")
+	optPid := p.f.Int("pid", -1, "look for pages of PID")
+	optPids := p.f.String("pids", "", "-pids=PID[,PID...] act on all pids")
 	swapIn := p.f.Bool("in", false, "swap in selected ranges")
 	swapOut := p.f.Bool("out", false, "swap out selected ranges")
 	ranges := p.f.String("ranges", "", "-ranges=RANGE[,RANGE...] select ranges. RANGE syntax: STARTADDR (single page at STARTADDR), STARTADDR-ENDADDR, STARTADDR+SIZE[kMG].")
 	status := p.f.Bool("status", false, "print number of swapped out pages")
 	vaddrs := p.f.Bool("vaddrs", false, "print vaddrs of swapped out pages")
+	useMover := p.f.Bool("mover", false, "use mover for bandwidth throttled swap out")
 
 	if err := p.f.Parse(args); err != nil {
 		return csOk
 	}
-	if *pid <= 0 {
-		p.output("missing -pid=PID\n")
+	allPids := []int{}
+	if *optPid != -1 {
+		allPids = append(allPids, *optPid)
+	}
+	if *optPids != "" {
+		pidsSlice := strings.Split(*optPids, ",")
+		for _, pidStr := range pidsSlice {
+			parsedPid, err := strconv.Atoi(pidStr)
+			if err != nil {
+				p.output("invalid pid %q: %s", pidStr, err)
+				return csOk
+			}
+			allPids = append(allPids, parsedPid)
+		}
+	}
+	if len(allPids) == 0 {
+		p.output("missing -pid=PID or -pids=PID[,PID...]\n")
 		return csOk
 	}
-	process := NewProcess(*pid)
-	ar, err := process.AddressRanges()
-	if err != nil {
-		p.output("error reading address ranges of process %d: %v\n", *pid, err)
-		return csOk
-	}
+	for _, pid := range allPids {
+		process := NewProcess(pid)
+		ar, err := process.AddressRanges()
+		if err != nil {
+			p.output("error reading address ranges of process %d: %v\n", pid, err)
+			return csOk
+		}
 
-	selectedRanges := []AddrRange{}
-	if *ranges != "" {
-		selectedRanges, err = parseOptRanges(*ranges)
-		if err != nil {
-			p.output("%s", err)
-			return csOk
-		}
-	}
-	if len(selectedRanges) > 0 {
-		ar.Intersection(selectedRanges)
-		p.output("using %d address ranges\n", len(ar.Ranges()))
-	}
-	if len(ar.Ranges()) == 0 {
-		p.output("no address ranges from which to find pages\n")
-		return csOk
-	}
-	if *swapIn {
-		memFile, err := ProcMemOpen(ar.Pid())
-		if err != nil {
-			p.output("%s\n", err)
-			return csOk
-		}
-		defer memFile.Close()
-		for _, r := range ar.Ranges() {
-			if err = memFile.ReadNoData(r.Addr(), r.EndAddr()); err != nil {
-				p.output("%s\n", err)
+		selectedRanges := []AddrRange{}
+		if *ranges != "" {
+			selectedRanges, err = parseOptRanges(*ranges)
+			if err != nil {
+				p.output("%s", err)
 				return csOk
 			}
 		}
-	}
-	if *swapOut {
-		if err := ar.SwapOut(); err != nil {
-			p.output("%s\n", err)
+		if len(selectedRanges) > 0 {
+			ar.Intersection(selectedRanges)
+			p.output("using %d address ranges\n", len(ar.Ranges()))
 		}
-	}
-
-	if *status || *vaddrs {
-		pmFile, err := ProcPagemapOpen(*pid)
-		if err != nil {
-			p.output("%s\n", err)
+		if len(ar.Ranges()) == 0 {
+			p.output("no address ranges from which to find pages\n")
 			return csOk
 		}
-		defer pmFile.Close()
-
-		pages := 0
-		swapped := 0
-		vaddrStart := uint64(0)
-		vaddrEnd := uint64(0)
-		pmFile.ForEachPage(ar.Ranges(), 0,
-			func(pmBits, pageAddr uint64) int {
-				pages++
-				if (pmBits>>PMB_SWAP)&1 == 0 {
-					if vaddrStart > 0 && *vaddrs {
-						p.output("%s\n", NewAddrRange(vaddrStart, vaddrEnd))
-					}
-					vaddrStart = 0
-					return 0
+		if *swapIn {
+			memFile, err := ProcMemOpen(ar.Pid())
+			if err != nil {
+				p.output("%s\n", err)
+				return csOk
+			}
+			defer memFile.Close()
+			for _, r := range ar.Ranges() {
+				if err = memFile.ReadNoData(r.Addr(), r.EndAddr()); err != nil {
+					p.output("%s\n", err)
+					return csOk
 				}
-				swapped++
-				vaddrEnd = pageAddr + constUPagesize
-				if vaddrStart == 0 {
-					vaddrStart = pageAddr
-				}
-				return 0
-			})
-		if vaddrStart > 0 && *vaddrs {
-			p.output("%s\n", NewAddrRange(vaddrStart, vaddrEnd))
+			}
 		}
-		p.output("%d / %d pages, %d / %d MB (%.1f %%) swapped out\n",
-			swapped, pages,
-			int64(swapped)*constPagesize/(1024*1024),
-			int64(pages)*constPagesize/(1024*1024),
-			float32(100*swapped)/float32(pages))
+		if *swapOut {
+			if *useMover {
+				if err := p.mover.Start(); err != nil {
+					p.output("mover error: %v\n", err)
+					return csOk
+				}
+				if pages, err := ar.PagesMatching(0); err == nil {
+					task := NewMoverTask(pages, NodeSwap)
+					p.mover.AddTask(task)
+				} else {
+					p.output("could not read pages of pid %d: %s", pid, err)
+				}
+			} else {
+				if err := ar.SwapOut(); err != nil {
+					p.output("%s\n", err)
+				}
+			}
+		}
+
+		if *status || *vaddrs {
+			pmFile, err := ProcPagemapOpen(pid)
+			if err != nil {
+				p.output("%s\n", err)
+				return csOk
+			}
+			defer pmFile.Close()
+
+			pages := 0
+			swapped := 0
+			vaddrStart := uint64(0)
+			vaddrEnd := uint64(0)
+			pmFile.ForEachPage(ar.Ranges(), 0,
+				func(pmBits, pageAddr uint64) int {
+					pages += 1
+					if (pmBits>>PMB_SWAP)&1 == 0 {
+						if vaddrStart > 0 && *vaddrs {
+							p.output("%s\n", NewAddrRange(vaddrStart, vaddrEnd))
+						}
+						vaddrStart = 0
+						return 0
+					}
+					swapped += 1
+					vaddrEnd = pageAddr + constUPagesize
+					if vaddrStart == 0 {
+						vaddrStart = pageAddr
+					}
+					return 0
+				})
+			if vaddrStart > 0 && *vaddrs {
+				p.output("%s\n", NewAddrRange(vaddrStart, vaddrEnd))
+			}
+			p.output("%d %d / %d pages, %d / %d MB (%.1f %%) swapped out\n",
+				pid,
+				swapped, pages,
+				int64(swapped)*constPagesize/(1024*1024),
+				int64(pages)*constPagesize/(1024*1024),
+				float32(100*swapped)/float32(pages))
+		}
 	}
 	return csOk
 }
