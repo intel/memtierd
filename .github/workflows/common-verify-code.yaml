@@ -1,7 +1,7 @@
-name: Main
+name: Verify code
 
 on:
-  pull_request: {}
+  - workflow_call
 
 jobs:
   build-and-test:
@@ -24,12 +24,6 @@ jobs:
         make bin/memtierd
         make bin/meme
 
-    - name: Unit test
-      run: make race=1 test
-
-    - name: Fuzz test
-      run: make race=1 fuzztest
-
     - name: Install dependencies for static checks
       run: |
         go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@latest
@@ -38,14 +32,24 @@ jobs:
     - name: Format check
       run: make format
 
-    #- name: Lint check
-    #  run: make lint
+    # FIXME(Jing Yan): once the following static checks are fixed, uncomment the following steps.
+    # - name: Lint check
+    #   run: make lint
 
-    #- name: Shell check
-    #  run: make shellcheck
+    # - name: Shell check
+    #   run: make shellcheck
 
-    #- name: Golangci lint check
-    #  run: make golangci-lint
+    # - name: Golangci lint check
+    #   run: make golangci-lint
 
-    #- name: Cyclomatic check
-    #  run: make cyclomatic-check
+    # - name: Cyclomatic check
+    #   run: make cyclomatic-check
+
+    - name: Unit test
+      run: make race=1 test
+
+    # - name: Fuzz test
+    #   un: make race=1 fuzztest
+
+  codeql-scan:
+    uses: "./.github/workflows/common-codeql.yaml"
