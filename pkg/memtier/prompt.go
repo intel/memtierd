@@ -605,6 +605,7 @@ func (p *Prompt) cmdMover(args []string) CommandStatus {
 	cont := p.f.Bool("continue", false, "continue moving")
 	tasks := p.f.Bool("tasks", false, "print current tasks")
 	removeTask := p.f.Int("remove-task", -1, "remove task ID")
+	wait := p.f.Bool("wait", false, "wait until all tasks have completed")
 	if err := p.f.Parse(args); err != nil {
 		return csOk
 	}
@@ -649,6 +650,9 @@ func (p *Prompt) cmdMover(args []string) CommandStatus {
 	}
 	if *removeTask != -1 {
 		p.mover.RemoveTask(*removeTask)
+	}
+	if *wait {
+		p.output("mover wait received: %s\n", <-p.mover.Wait(thsPaused, thsAllDone))
 	}
 	return csOk
 }

@@ -63,6 +63,7 @@ func FuzzPrompt(f *testing.F) {
 		"tracker -create idlepage" + trackerCommonArgs,
 		"tracker -create softdirty" + trackerCommonArgs,
 		"mover -config {\"IntervalMs\":50,\"Bandwidth\":1000} -pages-to 0" + moverCommonArgs,
+		"mover -config {\"IntervalMs\":500,\"Bandwidth\":1} -start -pages-to 1 -wait" + moverCommonArgs,
 		"mover -pause -start -stop -pages-to 0 -tasks" + moverCommonArgs,
 		"stats",
 		"stats -f csv",
