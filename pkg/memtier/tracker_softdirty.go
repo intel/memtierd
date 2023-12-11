@@ -116,6 +116,8 @@ func (t *TrackerSoftDirty) GetConfigJson() string {
 }
 
 func (t *TrackerSoftDirty) addRanges(pid int) {
+	t.regionsMutex.Lock()
+	defer t.regionsMutex.Unlock()
 	delete(t.regions, pid)
 	p := NewProcess(pid)
 	if ar, err := p.AddressRanges(); err == nil {
@@ -134,8 +136,6 @@ func (t *TrackerSoftDirty) addRanges(pid int) {
 
 func (t *TrackerSoftDirty) AddPids(pids []int) {
 	log.Debugf("TrackerSoftDirty: AddPids(%v)\n", pids)
-	t.regionsMutex.Lock()
-	defer t.regionsMutex.Unlock()
 	for _, pid := range pids {
 		t.addRanges(pid)
 	}
@@ -143,10 +143,10 @@ func (t *TrackerSoftDirty) AddPids(pids []int) {
 
 func (t *TrackerSoftDirty) RemovePids(pids []int) {
 	log.Debugf("TrackerSoftDirty: RemovePids(%v)\n", pids)
-	t.regionsMutex.Lock()
-	defer t.regionsMutex.Unlock()
 	if pids == nil {
+		t.regionsMutex.Lock()
 		t.regions = make(map[int][]*AddrRanges, 0)
+		t.regionsMutex.Unlock()
 		return
 	}
 	for _, pid := range pids {
@@ -155,8 +155,12 @@ func (t *TrackerSoftDirty) RemovePids(pids []int) {
 }
 
 func (t *TrackerSoftDirty) removePid(pid int) {
+	t.regionsMutex.Lock()
 	delete(t.regions, pid)
+	t.regionsMutex.Unlock()
+	t.mutex.Lock()
 	delete(t.accesses, pid)
+	t.mutex.Unlock()
 }
 
 func (t *TrackerSoftDirty) ResetCounters() {
@@ -195,6 +199,8 @@ func (t *TrackerSoftDirty) GetCounters() *TrackerCounters {
 }
 
 func (t *TrackerSoftDirty) Start() error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	if t.toSampler != nil {
 		return fmt.Errorf("sampler already running")
 	}
@@ -205,6 +211,8 @@ func (t *TrackerSoftDirty) Start() error {
 }
 
 func (t *TrackerSoftDirty) Stop() {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	if t.toSampler != nil {
 		t.toSampler <- 0
 	}
@@ -220,17 +228,17 @@ func (t *TrackerSoftDirty) sampler() {
 		stats.Store(StatsHeartbeat{"TrackerSoftDirty.sampler"})
 		select {
 		case <-t.toSampler:
+			t.mutex.Lock()
 			close(t.toSampler)
 			t.toSampler = nil
+			t.mutex.Unlock()
 			return
 		case <-ticker.C:
 			currentNs := time.Now().UnixNano()
 			if time.Duration(currentNs-lastRegionsUpdateNs) >= time.Duration(t.config.RegionsUpdateMs)*time.Millisecond {
-				t.regionsMutex.Lock()
 				for pid := range t.regions {
 					t.addRanges(pid)
 				}
-				t.regionsMutex.Unlock()
 				lastRegionsUpdateNs = currentNs
 			}
 			t.countPages()
@@ -322,9 +330,7 @@ func (t *TrackerSoftDirty) countPages() {
 		totWritten = 0
 		pmFile, err := ProcPagemapOpen(pid)
 		if err != nil {
-			t.regionsMutex.Lock()
 			t.removePid(pid)
-			t.regionsMutex.Unlock()
 			continue
 		}
 		if pagemapReadahead > 0 {
@@ -419,9 +425,7 @@ func (t *TrackerSoftDirty) clearPageBits() {
 		}
 		if err != nil {
 			// This process cannot be tracked anymore, remove it.
-			t.regionsMutex.Lock()
 			t.removePid(pid)
-			t.regionsMutex.Unlock()
 		}
 	}
 }

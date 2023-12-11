@@ -189,6 +189,8 @@ func (t *TrackerIdlePage) GetCounters() *TrackerCounters {
 }
 
 func (t *TrackerIdlePage) Start() error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	if t.toSampler != nil {
 		return fmt.Errorf("sampler already running")
 	}
@@ -202,6 +204,8 @@ func (t *TrackerIdlePage) Start() error {
 }
 
 func (t *TrackerIdlePage) Stop() {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	if t.toSampler != nil {
 		t.toSampler <- 0
 	}

@@ -52,6 +52,8 @@ func NewPidWatcherCgroups() (PidWatcher, error) {
 }
 
 func (w *PidWatcherCgroups) SetConfigJson(configJson string) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	config := &PidWatcherCgroupsConfig{}
 	if err := unmarshal(configJson, config); err != nil {
 		return err
@@ -81,18 +83,24 @@ func (w *PidWatcherCgroups) SetPidListener(l PidListener) {
 }
 
 func (w *PidWatcherCgroups) Poll() error {
+	w.mutex.Lock()
 	w.stop = false
+	w.mutex.Unlock()
 	w.loop(true)
 	return nil
 }
 
 func (w *PidWatcherCgroups) Start() error {
+	w.mutex.Lock()
 	w.stop = false
+	w.mutex.Unlock()
 	go w.loop(false)
 	return nil
 }
 
 func (w *PidWatcherCgroups) Stop() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.stop = true
 }
 
@@ -127,12 +135,13 @@ func (w *PidWatcherCgroups) loop(singleshot bool) {
 			}
 		}
 
+		w.mutex.Lock()
+
 		// If requested to stop, quit without informing listeners.
 		if w.stop {
+			w.mutex.Unlock()
 			break
 		}
-
-		w.mutex.Lock()
 
 		// Gather found pids that have not been reported.
 		newPids := []int{}
@@ -152,8 +161,6 @@ func (w *PidWatcherCgroups) loop(singleshot bool) {
 			}
 		}
 
-		w.mutex.Unlock()
-
 		// Report if there are any changes in pids.
 		if len(newPids) > 0 {
 			if w.pidListener != nil {
@@ -169,6 +176,8 @@ func (w *PidWatcherCgroups) loop(singleshot bool) {
 				log.Warnf("pidwatcher cgroup: ignoring disappeared pids %v because nobody is listening", oldPids)
 			}
 		}
+
+		w.mutex.Unlock()
 
 		// If only one execution was requested, quit without waiting.
 		if singleshot {
