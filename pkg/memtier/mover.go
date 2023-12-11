@@ -28,16 +28,23 @@ type MoverTask struct {
 
 // Mover represents the memory mover, which manages and executes memory movement tasks.
 type Mover struct {
-	mutex         sync.Mutex
-	running       bool
-	tasks         []*MoverTask
-	config        *MoverConfig
-	toTaskHandler chan taskHandlerCmd
+	mutex     sync.Mutex
+	running   bool
+	tasks     []*MoverTask
+	config    *MoverConfig
+	ths       MoverTaskHandlerStatus
+	waitCount uint64
+	waitChan  map[uint64]chan MoverTaskHandlerStatus
+	thsWaits  map[MoverTaskHandlerStatus][]uint64
 	// channel for new tasks and (re)configuring
+	toTaskHandler chan taskHandlerCmd
 }
 
 // taskHandlerCmd represents commands for the task handler.
 type taskHandlerCmd int
+
+// MoverTaskHandlerStatus represents the status of the task handler.
+type MoverTaskHandlerStatus int
 
 // taskStatus represents the status of a memory movement task.
 type taskStatus int
@@ -46,6 +53,11 @@ const (
 	thContinue taskHandlerCmd = iota
 	thQuit
 	thPause
+
+	thsNotRunning MoverTaskHandlerStatus = iota
+	thsPaused
+	thsBusy
+	thsAllDone
 
 	tsContinue taskStatus = iota
 	tsDone
@@ -59,6 +71,8 @@ const (
 func NewMover() *Mover {
 	return &Mover{
 		toTaskHandler: make(chan taskHandlerCmd, 8),
+		waitChan:      make(map[uint64]chan MoverTaskHandlerStatus),
+		thsWaits:      make(map[MoverTaskHandlerStatus][]uint64),
 	}
 }
 
@@ -68,6 +82,16 @@ func NewMoverTask(pages *Pages, toNode Node) *MoverTask {
 		pages: pages,
 		to:    []Node{toNode},
 	}
+}
+
+// String returns a string representation of the MoverTaskHandlerStatus
+func (ths MoverTaskHandlerStatus) String() string {
+	return map[MoverTaskHandlerStatus]string{
+		thsNotRunning: "NotRunning",
+		thsPaused:     "Paused",
+		thsBusy:       "Busy",
+		thsAllDone:    "AllDone",
+	}[ths]
 }
 
 // String returns a string representation of the MoverTask.
@@ -184,10 +208,12 @@ func (m *Mover) RemoveTask(taskID int) {
 func (m *Mover) taskHandler() {
 	log.Debugf("Mover: online\n")
 	defer func() {
+		m.setTaskHandlerStatus(thsNotRunning)
 		m.mutex.Lock()
 		defer m.mutex.Unlock()
 		log.Debugf("Mover: offline\n")
 	}()
+	m.setTaskHandlerStatus(thsPaused)
 	for {
 		// blocking channel read when there are no tasks
 		cmd := <-m.toTaskHandler
@@ -195,8 +221,9 @@ func (m *Mover) taskHandler() {
 		case thQuit:
 			return
 		case thPause:
-			break
+			continue
 		}
+		m.setTaskHandlerStatus(thsBusy)
 	busyloop:
 		for {
 			stats.Store(StatsHeartbeat{"mover.taskHandler"})
@@ -204,6 +231,7 @@ func (m *Mover) taskHandler() {
 			task, intervalMs, bandwidth := m.popTask()
 			if task == nil {
 				// no more tasks, back to blocking reads
+				m.setTaskHandlerStatus(thsAllDone)
 				break
 			}
 			if ts := m.handleTask(task, intervalMs, bandwidth); ts == tsContinue {
@@ -218,6 +246,7 @@ func (m *Mover) taskHandler() {
 				case thQuit:
 					return
 				case thPause:
+					m.setTaskHandlerStatus(thsPaused)
 					break busyloop
 				}
 			default:
@@ -264,6 +293,49 @@ func (m *Mover) handleTask(task *MoverTask, intervalMs, bandwidth int) taskStatu
 		return tsContinue
 	}
 	return tsDone
+}
+
+// setTaskHandlerStatus changes current task handler status and
+// informs those who were registered to wait new status.
+func (m *Mover) setTaskHandlerStatus(ths MoverTaskHandlerStatus) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.ths = ths
+	for _, waitId := range m.thsWaits[ths] {
+		if c, ok := m.waitChan[waitId]; ok {
+			c <- ths
+			delete(m.waitChan, waitId)
+			close(c)
+		}
+	}
+	delete(m.thsWaits, ths)
+}
+
+// Wait(waitForStatus0, ...) returns a channel from which mover's task handler
+// status change can be read. Only listed statuses are reported through the
+// channel, and the channel gets closed immediately after reporting the first
+// status change.
+func (m *Mover) Wait(thss ...MoverTaskHandlerStatus) <-chan MoverTaskHandlerStatus {
+	if len(thss) == 0 {
+		return nil
+	}
+	c := make(chan MoverTaskHandlerStatus)
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	for _, ths := range thss {
+		if m.ths == ths {
+			// The status is already what is waited for.
+			go func() { c <- m.ths }()
+			return c
+		}
+	}
+	waitId := m.waitCount
+	m.waitCount++
+	m.waitChan[waitId] = c
+	for _, ths := range thss {
+		m.thsWaits[ths] = append(m.thsWaits[ths], waitId)
+	}
+	return c
 }
 
 // TaskCount returns the number of memory movement tasks in the Mover.
