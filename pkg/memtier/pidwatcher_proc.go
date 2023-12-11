@@ -52,6 +52,8 @@ func NewPidWatcherProc() (PidWatcher, error) {
 }
 
 func (w *PidWatcherProc) SetConfigJson(configJson string) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	config := &PidWatcherProcConfig{}
 	if err := unmarshal(configJson, config); err != nil {
 		return err
@@ -155,8 +157,6 @@ func (w *PidWatcherProc) loop(singleshot bool) {
 			}
 		}
 
-		w.mutex.Unlock()
-
 		// Report if there are any changes in pids.
 		if len(newPids) > 0 {
 			if w.pidListener != nil {
@@ -172,6 +172,8 @@ func (w *PidWatcherProc) loop(singleshot bool) {
 				log.Warnf("pidwatcher proc: ignoring disappeared pids %v because nobody is listening", oldPids)
 			}
 		}
+
+		w.mutex.Unlock()
 
 		// If only one execution was requested, quit without waiting.
 		if singleshot {
