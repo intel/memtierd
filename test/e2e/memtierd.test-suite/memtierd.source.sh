@@ -5,6 +5,7 @@ memtierd-setup() {
     memtierd-install
     memtierd-reset
     memtierd-os-env
+    memtierd-version-check || sleep 5
 }
 
 memtierd-install() {
@@ -27,6 +28,36 @@ memtierd-reset() {
 
 memtierd-os-env() {
     vm-command "[[ \$(< /proc/sys/kernel/numa_balancing) -ne 0 ]] && { echo disabling autonuma; echo 0 > /proc/sys/kernel/numa_balancing; }"
+}
+
+memtierd-version-check() {
+    local host_ver
+    local vm_ver
+    [ -x "${memtierd_src}/bin/memtierd" ] || {
+        echo "WARNING"
+        echo "WARNING Cannot compare memtierd version on VM to the latest build on host, missing:"
+        echo "WARNING ${memtierd_src}/bin/memtierd"
+        echo "WARNING"
+        echo "WARNING Consider building memtierd for testing: make DEBUG=1 STATIC=1 RACE=1"
+        echo "WARNING"
+        return 1
+    }
+    host_ver=$(${memtierd_src}/bin/memtierd -version)
+    vm-command "memtierd -version"
+    vm_ver="$COMMAND_OUTPUT"
+    if [[ "$host_ver" != "$vm_ver" ]]; then
+        echo "WARNING"
+        echo "WARNING memtierd version on VM differs from the latest build on host"
+        echo "WARNING vm:"
+        echo "$vm_ver" | while read l; do echo "WARNING    $l"; done
+        echo "WARNING host:"
+        echo "$host_ver" | while read l; do echo "WARNING    $l"; done
+        echo "WARNING"
+        echo "WARNING Consider running tests with reinstall_memtierd=1"
+        echo "WARNING"
+        sleep 5
+        return 1
+    fi
 }
 
 memtierd-start() {
