@@ -249,7 +249,7 @@ func (r *RoutineStatActions) timestamp(tsFmt string) string {
 			token = "duration.nano"
 		}
 		durationTimeStr := fmt.Sprintf("%."+strconv.Itoa(d)+"f",
-			unixTimeFloat - r.startedUnixFloat)
+			unixTimeFloat-r.startedUnixFloat)
 		s = strings.Replace(s, token, durationTimeStr, -1)
 	}
 	return s
