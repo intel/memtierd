@@ -144,7 +144,7 @@ bin/%: .static.%.$(STATIC)
 	$(Q)bin=$(notdir $@); src=./cmd/$$bin; \
 	echo "Building $$([ -n "$(STATIC)" ] && echo 'static ')$@ (version $(BUILD_VERSION), build $(BUILD_BUILDID))..."; \
 	mkdir -p bin && \
-	$(GO_BUILD) $(BUILD_TAGS) $(LDFLAGS) $(GCFLAGS) $(RACEFLAGS) -o bin/ $$src
+	$(GO_BUILD) $(BUILD_TAGS) $(LDFLAGS) $(GCFLAGS) $(if $(filter bin/meme,$@),,$(RACEFLAGS)) -o bin/ $$src
 
 .static.%.$(STATIC):
 	$(Q)if [ ! -f "$@" ]; then \
