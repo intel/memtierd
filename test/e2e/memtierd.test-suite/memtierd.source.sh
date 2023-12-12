@@ -42,6 +42,14 @@ memtierd-version-check() {
         echo "WARNING"
         return 1
     }
+    ( cd "${memtierd_src}" && ( make -q bin/memtierd || make -q STATIC=1 bin/memtierd ) ) || {
+        echo "WARNING"
+        echo "WARNING Sources changed, latest build is not up-to-date."
+        echo "WARNING"
+        echo "WARNING Consider rebuilding memtierd for testing: make DEBUG=1 STATIC=1 RACE=1"
+        echo "WARNING"
+        return 1
+    }
     host_ver=$(${memtierd_src}/bin/memtierd -version)
     vm-command "memtierd -version"
     vm_ver="$COMMAND_OUTPUT"
