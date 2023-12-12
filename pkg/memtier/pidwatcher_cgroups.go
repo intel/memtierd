@@ -74,6 +74,8 @@ func (w *PidWatcherCgroups) SetConfigJSON(configJSON string) error {
 
 // GetConfigJSON gets the configuration for the Cgroups-based PID watcher in JSON format.
 func (w *PidWatcherCgroups) GetConfigJSON() string {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.config == nil {
 		return ""
 	}
@@ -85,6 +87,8 @@ func (w *PidWatcherCgroups) GetConfigJSON() string {
 
 // SetPidListener sets the listener for PID changes.
 func (w *PidWatcherCgroups) SetPidListener(l PidListener) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.pidListener = l
 }
 
