@@ -348,6 +348,7 @@ func (t *TrackerSoftDirty) countPages() {
 			if cntPagesWritten > maxCount {
 				cntPagesWritten = maxCount
 			}
+			t.mutex.Lock()
 			addrLenCounts, ok := t.accesses[pid]
 			if !ok {
 				addrLenCounts = make(map[uint64]map[uint64]*accessCounter)
@@ -367,6 +368,7 @@ func (t *TrackerSoftDirty) countPages() {
 			}
 			counts.a += cntPagesAccessed
 			counts.w += cntPagesWritten
+			t.mutex.Unlock()
 			totAccessed += cntPagesAccessed
 			totWritten += cntPagesWritten
 			if t.raes.data != nil {
