@@ -72,6 +72,8 @@ func (w *PidWatcherProc) SetConfigJSON(configJSON string) error {
 
 // GetConfigJSON is a method of PidWatcherProc that returns the current configuration as a JSON string.
 func (w *PidWatcherProc) GetConfigJSON() string {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.config == nil {
 		return ""
 	}
@@ -83,6 +85,8 @@ func (w *PidWatcherProc) GetConfigJSON() string {
 
 // SetPidListener is a method of PidWatcherProc that sets the PidListener.
 func (w *PidWatcherProc) SetPidListener(l PidListener) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.pidListener = l
 }
 

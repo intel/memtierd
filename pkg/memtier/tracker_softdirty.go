@@ -121,8 +121,6 @@ func (t *TrackerSoftDirty) GetConfigJSON() string {
 }
 
 func (t *TrackerSoftDirty) addRanges(pid int) {
-	t.regionsMutex.Lock()
-	defer t.regionsMutex.Unlock()
 	delete(t.regions, pid)
 	p := NewProcess(pid)
 	if ar, err := p.AddressRanges(); err == nil {
@@ -143,7 +141,9 @@ func (t *TrackerSoftDirty) addRanges(pid int) {
 func (t *TrackerSoftDirty) AddPids(pids []int) {
 	log.Debugf("TrackerSoftDirty: AddPids(%v)\n", pids)
 	for _, pid := range pids {
+		t.regionsMutex.Lock()
 		t.addRanges(pid)
+		t.regionsMutex.Unlock()
 	}
 }
 
@@ -247,9 +247,11 @@ func (t *TrackerSoftDirty) sampler() {
 		case <-ticker.C:
 			currentNs := time.Now().UnixNano()
 			if time.Duration(currentNs-lastRegionsUpdateNs) >= time.Duration(t.config.RegionsUpdateMs)*time.Millisecond {
+				t.regionsMutex.Lock()
 				for pid := range t.regions {
 					t.addRanges(pid)
 				}
+				t.regionsMutex.Unlock()
 				lastRegionsUpdateNs = currentNs
 			}
 			t.countPages()

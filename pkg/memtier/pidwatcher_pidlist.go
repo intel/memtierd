@@ -17,6 +17,7 @@ package memtier
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 )
 
 // PidWatcherPidlistConfig holds the configuration for PidWatcherPidlist.
@@ -28,6 +29,7 @@ type PidWatcherPidlistConfig struct {
 type PidWatcherPidlist struct {
 	config      *PidWatcherPidlistConfig
 	pidListener PidListener
+	mutex       sync.Mutex
 }
 
 func init() {
@@ -42,6 +44,8 @@ func NewPidWatcherPidlist() (PidWatcher, error) {
 // SetConfigJSON is a method of PidWatcherPidlist that sets the configuration from JSON.
 // It unmarshals the input JSON string into the PidWatcherPidlistConfig structure.
 func (w *PidWatcherPidlist) SetConfigJSON(configJSON string) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	config := &PidWatcherPidlistConfig{}
 	if err := unmarshal(configJSON, config); err != nil {
 		return err
@@ -52,6 +56,8 @@ func (w *PidWatcherPidlist) SetConfigJSON(configJSON string) error {
 
 // GetConfigJSON is a method of PidWatcherPidlist that returns the current configuration as a JSON string.
 func (w *PidWatcherPidlist) GetConfigJSON() string {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.config == nil {
 		return ""
 	}
@@ -63,12 +69,16 @@ func (w *PidWatcherPidlist) GetConfigJSON() string {
 
 // SetPidListener is a method of PidWatcherPidlist that sets the PidListener.
 func (w *PidWatcherPidlist) SetPidListener(l PidListener) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.pidListener = l
 }
 
 // Poll is a method of PidWatcherPidlist that simulates polling for PIDs.
 // It adds the configured PIDs to the PidListener, if available.
 func (w *PidWatcherPidlist) Poll() error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.config == nil {
 		return fmt.Errorf("pidwatcher pidlist: tried to poll without a configuration")
 	}
@@ -83,6 +93,8 @@ func (w *PidWatcherPidlist) Poll() error {
 // Start is a method of PidWatcherPidlist that simulates starting the PidWatcher.
 // It adds the configured PIDs to the PidListener, if available.
 func (w *PidWatcherPidlist) Start() error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.config == nil {
 		return fmt.Errorf("pidwatcher pidlist: tried to start without a configuration")
 	}
