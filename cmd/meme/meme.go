@@ -115,7 +115,7 @@ func bExerciser(exerciserID int, read, write bool, ba *bArray, offset int64, cou
 				for p := 0; p < portionCount; p++ {
 					nextIndex := roundStartIndex + int64(portionOrder[p])*portionSize + i
 					b[nextIndex] = bValue
-					bValue += 1
+					bValue++
 				}
 			}
 		}
@@ -259,14 +259,14 @@ func allocateBArray(bSize int64) {
 		ba.readers = 1
 		bReaderCount--
 		go bExerciser(exerciserCount, true, false, ba, bReadOffset, bReadSize, bReadInterval, bReadPortions, bReadOffsetDelta, bReadSizeDelta)
-		exerciserCount += 1
+		exerciserCount++
 	}
 	// create writers
 	if bWriterCount > 0 {
 		ba.writers = 1
 		bWriterCount--
 		go bExerciser(exerciserCount, false, true, ba, bWriteOffset, bWriteSize, bWriteInterval, bWritePortions, bWriteOffsetDelta, bWriteSizeDelta)
-		exerciserCount += 1
+		exerciserCount++
 	}
 }
 
