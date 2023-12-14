@@ -23,7 +23,10 @@ match-moved() {
     local min_seconds=$3
     local max_seconds=$4
     round_number=0
-    while ! ( memtierd-command "stats -t move_pages -f csv | awk -F, \"{print \\\$6}\""; grep ${moved_regexp} <<< $COMMAND_OUTPUT); do
+    while ! (
+        memtierd-command "stats -t move_pages -f csv | awk -F, \"{print \\\$6}\""
+        grep ${moved_regexp} <<<$COMMAND_OUTPUT
+    ); do
         echo "grep MOVED value to the target numa node ${target_numa_node} matching ${moved_regexp} not found"
         next-round round_number $max_seconds 1s || {
             error "timeout: memtierd did not expected amount of memory"
@@ -32,7 +35,7 @@ match-moved() {
     if [[ "$round_number" -lt "$min_seconds" ]]; then
         error "too fast page moves, expected at least $min_seconds seconds, got $round_number"
     fi
-    echo "pages moved in less than $(( round_number + 1 )) seconds that is in expected range [$min_seconds, $max_seconds]"
+    echo "pages moved in less than $((round_number + 1)) seconds that is in expected range [$min_seconds, $max_seconds]"
 }
 
 mover_conf=(
@@ -49,15 +52,14 @@ mover_min_max_seconds=(
     "1 2"
 )
 
-for target_numa_node in {0..3}
-do
-  MEMTIERD_YAML=""
-  memtierd-start
-  memtierd-command "pages -pid ${MEME_PID}"
-  memtierd-command "mover ${mover_conf[$target_numa_node]} -pages-to ${target_numa_node}"
-  echo "waiting 700M+ to be moved to ${target_numa_node}"
-  match-moved "${target_numa_node}\:0\.7[0-9][0-9]" ${target_numa_node} ${mover_min_max_seconds[$target_numa_node]}
-  memtierd-stop
+for target_numa_node in {0..3}; do
+    MEMTIERD_YAML=""
+    memtierd-start
+    memtierd-command "pages -pid ${MEME_PID}"
+    memtierd-command "mover ${mover_conf[$target_numa_node]} -pages-to ${target_numa_node}"
+    echo "waiting 700M+ to be moved to ${target_numa_node}"
+    match-moved "${target_numa_node}\:0\.7[0-9][0-9]" ${target_numa_node} ${mover_min_max_seconds[$target_numa_node]}
+    memtierd-stop
 done
 
 memtierd-meme-stop
