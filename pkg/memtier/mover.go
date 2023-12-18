@@ -301,17 +301,17 @@ func (m *Mover) setTaskHandlerStatus(ths MoverTaskHandlerStatus) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.ths = ths
-	for _, waitId := range m.thsWaits[ths] {
-		if c, ok := m.waitChan[waitId]; ok {
+	for _, waitID := range m.thsWaits[ths] {
+		if c, ok := m.waitChan[waitID]; ok {
 			c <- ths
-			delete(m.waitChan, waitId)
+			delete(m.waitChan, waitID)
 			close(c)
 		}
 	}
 	delete(m.thsWaits, ths)
 }
 
-// Wait(waitForStatus0, ...) returns a channel from which mover's task handler
+// Wait returns a channel from which mover's task handler
 // status change can be read. Only listed statuses are reported through the
 // channel, and the channel gets closed immediately after reporting the first
 // status change.
@@ -329,11 +329,11 @@ func (m *Mover) Wait(thss ...MoverTaskHandlerStatus) <-chan MoverTaskHandlerStat
 			return c
 		}
 	}
-	waitId := m.waitCount
+	waitID := m.waitCount
 	m.waitCount++
-	m.waitChan[waitId] = c
+	m.waitChan[waitID] = c
 	for _, ths := range thss {
-		m.thsWaits[ths] = append(m.thsWaits[ths], waitId)
+		m.thsWaits[ths] = append(m.thsWaits[ths], waitID)
 	}
 	return c
 }

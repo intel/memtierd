@@ -389,7 +389,7 @@ func (p *Prompt) cmdSwap(args []string) CommandStatus {
 			vaddrEnd := uint64(0)
 			pmFile.ForEachPage(ar.Ranges(), 0,
 				func(pmBits, pageAddr uint64) int {
-					pages += 1
+					pages++
 					if (pmBits>>PMB_SWAP)&1 == 0 {
 						if vaddrStart > 0 && *vaddrs {
 							p.output("%s\n", NewAddrRange(vaddrStart, vaddrEnd))
@@ -397,7 +397,7 @@ func (p *Prompt) cmdSwap(args []string) CommandStatus {
 						vaddrStart = 0
 						return 0
 					}
-					swapped += 1
+					swapped++
 					vaddrEnd = pageAddr + constUPagesize
 					if vaddrStart == 0 {
 						vaddrStart = pageAddr
