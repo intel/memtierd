@@ -42,7 +42,7 @@ memtierd-version-check() {
         echo "WARNING"
         return 1
     }
-    ( cd "${memtierd_src}" && ( make -q bin/memtierd || make -q STATIC=1 bin/memtierd ) ) || {
+    (cd "${memtierd_src}" && (make -q bin/memtierd || make -q STATIC=1 bin/memtierd)) || {
         echo "WARNING"
         echo "WARNING Sources changed, latest build is not up-to-date."
         echo "WARNING"
@@ -75,7 +75,7 @@ memtierd-start() {
     if [ -z "${MEMTIERD_YAML}" ]; then
         MEMTIERD_OPTS="-prompt -debug"
     else
-        vm-pipe-to-file "memtierd.yaml" <<< "${MEMTIERD_YAML}"
+        vm-pipe-to-file "memtierd.yaml" <<<"${MEMTIERD_YAML}"
         MEMTIERD_OPTS="-config memtierd.yaml -debug"
     fi
     vm-command "nohup sh -c 'socat tcp4-listen:${MEMTIERD_PORT},fork,reuseaddr - | memtierd ${MEMTIERD_OPTS}' > ${MEMTIERD_OUTPUT} 2>&1 & sleep 2; cat ${MEMTIERD_OUTPUT}"
@@ -91,12 +91,12 @@ memtierd-stop() {
 }
 
 memtierd-command() {
-    vm-command "offset=\$(wc -l ${MEMTIERD_OUTPUT} | awk '{print \$1+1}'); echo '$1' | socat - tcp4:localhost:${MEMTIERD_PORT}; sleep 1; tail -n+\${offset} ${MEMTIERD_OUTPUT}"
+    vm-command "offset=\$(wc -l ${MEMTIERD_OUTPUT} | awk '{print \$1+1}'); echo -e '$1' | socat - tcp4:localhost:${MEMTIERD_PORT}; sleep 1; tail -n+\${offset} ${MEMTIERD_OUTPUT}"
 }
 
 memtierd-meme-start() {
     vm-command "nohup meme -bs ${MEME_BS:-1G} -brc ${MEME_BRC:-0} -brs ${MEME_BRS:-0} -bro ${MEME_BRO:-0} -bwc ${MEME_BWC:-0} -bws ${MEME_BWS:-0} -bwo ${MEME_BWO:-0} -ttl ${MEME_TTL:-1h} < /dev/null > meme.output.txt 2>&1 & sleep 2; cat meme.output.txt"
-    MEME_PID=$(awk '/pid:/{print $2}' <<< $COMMAND_OUTPUT)
+    MEME_PID=$(awk '/pid:/{print $2}' <<<$COMMAND_OUTPUT)
     if [[ -z "$MEME_PID" ]]; then
         command-error "failed to start meme, pid not found"
     fi
@@ -129,18 +129,21 @@ memtierd-verify-scanned-pids() {
     local expected_pid_count=$#
 
     for pid_regexp in "$@"; do
-      round_number=0
-      while ! ( memtierd-command "stats -t memory_scans -f csv | awk -F, \"{print \\\$1}\""; grep ${pid_regexp} <<< $COMMAND_OUTPUT) ; do
-        echo "grep pid matching ${pid_regexp} not found"
-        next-round round_number 5 1 || {
-            error "timeout: memtierd did not watch ${pid_regexp}"
-        }
-      done
+        round_number=0
+        while ! (
+            memtierd-command "stats -t memory_scans -f csv | awk -F, \"{print \\\$1}\""
+            grep ${pid_regexp} <<<$COMMAND_OUTPUT
+        ); do
+            echo "grep pid matching ${pid_regexp} not found"
+            next-round round_number 5 1 || {
+                error "timeout: memtierd did not watch ${pid_regexp}"
+            }
+        done
     done
 
     memtierd-command 'stats -t memory_scans -f csv'
-    observed_pid_count="$(grep ^[0-9] <<< "$COMMAND_OUTPUT" | wc -l)"
-    if [[ "$observed_pid_count"  != "$expected_pid_count" ]]; then
+    observed_pid_count="$(grep ^[0-9] <<<"$COMMAND_OUTPUT" | wc -l)"
+    if [[ "$observed_pid_count" != "$expected_pid_count" ]]; then
         error "expected memtierd to watch ${expected_pid_count} pids, but got ${observed_pid_count} pids"
     fi
 }
