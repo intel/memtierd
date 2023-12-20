@@ -18,6 +18,7 @@ import (
 	"os"
 )
 
+//nolint:golint //ignore the variables' naming as they are from Linux kernel code
 const (
 	// Requirements for pagemap bits
 	PMPresentSet uint64 = 1 << iota

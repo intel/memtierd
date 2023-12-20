@@ -260,10 +260,6 @@ func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 		// now thr.addr == hr.addr
 		hrEndAddr := hr.addr + hr.length*constUPagesize
 		thrEndAddr := thr.addr + thr.length*constUPagesize
-		endAddr := hrEndAddr
-		if endAddr > thrEndAddr {
-			endAddr = thrEndAddr
-		}
 		if thrEndAddr < hrEndAddr {
 			// Case:
 			// |--------hr-------|

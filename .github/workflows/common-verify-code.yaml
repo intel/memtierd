@@ -56,10 +56,10 @@ jobs:
     - name: Shell check
       run: make shellcheck
 
-    # FIXME(Jing Yan): once the following static checks are fixed, uncomment the following steps.
-    # - name: Golangci lint check
-    #   run: make golangci-lint
+    - name: Golangci lint check
+      run: make golangci-lint
 
+      # FIXME(Jing Yan): once the following static checks are fixed, uncomment the following steps.
     # - name: Cyclomatic check
     #   run: make cyclomatic-check
 

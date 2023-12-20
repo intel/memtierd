@@ -124,9 +124,7 @@ func (t *TrackerIdlePage) addRanges(pid int) {
 		// filter out single-page address ranges
 		ar = ar.Filter(func(r AddrRange) bool { return r.Length() > 1 })
 		ar = ar.SplitLength(t.config.PagesInRegion)
-		for _, r := range ar.Flatten() {
-			t.regions[pid] = append(t.regions[pid], r)
-		}
+		t.regions[pid] = append(t.regions[pid], ar.Flatten()...)
 	} else {
 		delete(t.regions, pid)
 		t.mutex.Lock()

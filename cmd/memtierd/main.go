@@ -34,7 +34,7 @@ type config struct {
 }
 
 func exit(format string, a ...interface{}) {
-	fmt.Fprintf(os.Stderr, fmt.Sprintf("memtierd: "+format+"\n", a...))
+	_, _ = fmt.Fprintf(os.Stderr, "memtierd: "+format+"\n", a...)
 	os.Exit(1)
 }
 
@@ -112,7 +112,9 @@ func main() {
 
 	for r, routine := range routines {
 		if policy != nil {
-			routine.SetPolicy(policy)
+			if err := routine.SetPolicy(policy); err != nil {
+				exit("error in setting policy for routine: %s", err)
+			}
 		}
 		if err := routine.Start(); err != nil {
 			exit("error in starting routine %d: %s", r+1, err)

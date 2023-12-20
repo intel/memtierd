@@ -247,7 +247,7 @@ func (p *PolicyHeat) Dump(args []string) string {
 		maxHeat := float64(0.0) // maximum heat that appears in the heatmap
 		pidMaxHeat := map[int]float64{}
 		lines = append(lines, "", "table: maximum heat in heatmaps")
-		lines = append(lines, fmt.Sprintf("     pid  maxHeat"))
+		lines = append(lines, "     pid  maxHeat")
 		for _, pid := range sortInts(p.heatmap.Pids()) {
 			p.heatmap.ForEachRange(pid, func(hr *HeatRange) int {
 				if hr.heat > maxHeat {
@@ -352,14 +352,9 @@ func (p *PolicyHeat) Start() error {
 	}
 	p.chLoop = make(chan interface{})
 	p.pidwatcher.SetPidListener(p.tracker)
-	p.pidwatcher.Start()
-	// p.pidwatcher.SetSources(p.config.Cgroups)
-	// if len(p.config.Cgroups) > 0 {
-	// 	p.pidwatcher.Start(p.tracker)
-	// }
-	// if len(p.config.Pids) > 0 {
-	// 	p.tracker.AddPids(p.config.Pids)
-	// }
+	if err := p.pidwatcher.Start(); err != nil {
+		return fmt.Errorf("pidwatcher start error: %w", err)
+	}
 	if err := p.mover.Start(); err != nil {
 		return fmt.Errorf("mover start error: %w", err)
 	}
@@ -409,7 +404,6 @@ func (p *PolicyHeat) loop() {
 		select {
 		case <-p.chLoop:
 			quit = true
-			break
 		case <-ticker.C:
 			// TODO:
 			// Go through which pages should be moved.
@@ -445,7 +439,7 @@ func (p *PolicyHeat) updatePagedOutLocations(timestamp int64) {
 			continue
 		}
 		for _, ar := range ars {
-			pmFile.ForEachPage([]AddrRange{*ar}, 0,
+			_ = pmFile.ForEachPage([]AddrRange{*ar}, 0,
 				func(pmBits, pageAddr uint64) int {
 					if (pmBits>>PMB_SWAP)&1 == 1 {
 						return 0 // swapped out as expected
@@ -534,7 +528,6 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 							p.numaUsed[node] += int((prevPageAddress + constUPagesize - firstPageAddress) / constUPagesize)
 						}
 						firstPageAddress = pageAddress
-						prevPageAddress = pageAddress
 						prevPageNode = node
 					}
 					prevPageAddress = pageAddress

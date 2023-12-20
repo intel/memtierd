@@ -270,11 +270,11 @@ func (r *RoutineStatActions) runCommand(runner string, command []string) error {
 		return fmt.Errorf("invalid command runner '%s'", runner)
 	}
 	if r.config.Timestamp != "" {
-		fmt.Printf(r.timestamp(r.config.Timestamp))
+		fmt.Print(r.timestamp(r.config.Timestamp))
 	}
 	err := commandRunner(command)
 	if r.config.TimestampAfter != "" {
-		fmt.Printf(r.timestamp(r.config.TimestampAfter))
+		fmt.Print(r.timestamp(r.config.TimestampAfter))
 	}
 	return err
 }
@@ -293,7 +293,6 @@ func (r *RoutineStatActions) loop() {
 		select {
 		case <-r.cgLoop:
 			quit = true
-			break
 		case <-ticker.C:
 			stats.Store(StatsHeartbeat{"RoutineStatActions.tick"})
 		}

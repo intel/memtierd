@@ -374,7 +374,7 @@ func main() {
 	// wait
 	if *optTTL == "" {
 		fmt.Printf("press enter to exit...\n")
-		bufio.NewReader(os.Stdin).ReadString('\n')
+		_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 	} else {
 		time.Sleep(numNs("-ttl", *optTTL))
 	}

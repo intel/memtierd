@@ -222,11 +222,17 @@ func (p *PolicyRatio) Start() error {
 	if p.tracker == nil {
 		return fmt.Errorf("missing tracker")
 	}
-	p.tracker.Start()
-	p.cgLoop = make(chan interface{})
+	if err := p.tracker.Start(); err != nil {
+		return fmt.Errorf("tracker start error: %w", err)
+	}
 	p.pidwatcher.SetPidListener(p.tracker)
-	p.pidwatcher.Start()
-	p.mover.Start()
+	if err := p.pidwatcher.Start(); err != nil {
+		return fmt.Errorf("pidwatcher start error: %w", err)
+	}
+	if err := p.mover.Start(); err != nil {
+		return fmt.Errorf("mover start error: %w", err)
+	}
+	p.cgLoop = make(chan interface{})
 	go p.loop()
 	return nil
 }
@@ -303,7 +309,7 @@ func (p *PolicyRatio) getBytesInSwap(pid int) (uint64, error) {
 
 	pages := 0
 	swapped := uint64(0)
-	pmFile.ForEachPage(ar.Ranges(), 0,
+	_ = pmFile.ForEachPage(ar.Ranges(), 0,
 		func(pmBits, pageAddr uint64) int {
 			pages++
 			if (pmBits>>PMB_SWAP)&1 == 0 { // Not Swap

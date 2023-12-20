@@ -127,9 +127,7 @@ func (t *TrackerSoftDirty) addRanges(pid int) {
 		// filter out single-page address ranges
 		ar = ar.Filter(func(r AddrRange) bool { return r.Length() > 1 })
 		ar = ar.SplitLength(t.config.PagesInRegion)
-		for _, r := range ar.Flatten() {
-			t.regions[pid] = append(t.regions[pid], r)
-		}
+		t.regions[pid] = append(t.regions[pid], ar.Flatten()...)
 	} else {
 		delete(t.regions, pid)
 		t.mutex.Lock()
@@ -264,7 +262,7 @@ func (t *TrackerSoftDirty) sampler() {
 func (t *TrackerSoftDirty) countPages() {
 	pmAttrs := PMPresentSet | PMExclusiveSet
 
-	var kpfFile *procKpageflagsFile
+	var kpfFile *ProcKpageflagsFile
 	var err error
 
 	t.mutex.Lock()

@@ -216,17 +216,33 @@ func (t *TrackerDamon) GetConfigJSON() string {
 	return ""
 }
 
+func (t *TrackerDamon) applyPidsWithDamonStarted() (err error) {
+	if t.started {
+		if err = t.iface.ApplyState("off"); err != nil {
+			return err
+		}
+		if err = t.applyPids(); err != nil {
+			return err
+		}
+		if err = t.iface.ApplyState("on"); err != nil {
+			return err
+		}
+		if err = t.updateKdamondConnection(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // AddPids adds process IDs to be tracked by DAMON.
 func (t *TrackerDamon) AddPids(pids []int) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	log.Debugf("TrackerDamon.AddPids(%v)\n", pids)
 	t.pids = append(t.pids, pids...)
-	if t.started {
-		t.iface.ApplyState("off")
-		t.applyPids()
-		t.iface.ApplyState("on")
-		t.updateKdamondConnection()
+	if err := t.applyPidsWithDamonStarted(); err != nil {
+		log.Errorf("AddPids failed with error: %s", err)
+		return
 	}
 }
 
@@ -242,11 +258,9 @@ func (t *TrackerDamon) RemovePids(pids []int) {
 	for _, pid := range pids {
 		t.removePid(pid)
 	}
-	if t.started {
-		t.iface.ApplyState("off")
-		t.applyPids()
-		t.iface.ApplyState("on")
-		t.updateKdamondConnection()
+	if err := t.applyPidsWithDamonStarted(); err != nil {
+		log.Errorf("RemovePids failed with errpr: %s", err)
+		return
 	}
 }
 
@@ -471,7 +485,9 @@ func (sysfs *damonSysfs) ApplyTargetIds(pids []int) error {
 	/* TODO: optimize, small changes in pids could be limited to
 	   only some kdamonds, thus some of them could be kept running
 	   without a reset. */
-	sysfs.ApplyState("off")
+	if err := sysfs.ApplyState("off"); err != nil {
+		return fmt.Errorf("sysfs switch off failed: %w", err)
+	}
 	kdamondIndexPids := make([][]int, len(sysfs.kdamondsList))
 	kdamondIndex := 0
 	for _, pid := range pids {
@@ -603,9 +619,11 @@ func (t *TrackerDamon) updateKdamondConnection() error {
 		// correct connection.
 		if strings.HasPrefix(t.config.Connection, "perf") && t.toPerfReader == nil {
 			t.toPerfReader = make(chan byte, 1)
+			//nolint:errcheck //ignore err check for "go func()"
 			go t.perfReader()
 		} else if strings.HasPrefix(t.config.Connection, "bpftrace") && t.toBpftraceReader == nil {
 			t.toBpftraceReader = make(chan byte, 1)
+			//nolint:errcheck //ignore err check for "go func()"
 			go t.bpftraceReader()
 		} else {
 			return fmt.Errorf("invalid Connection in TrackerDamon configuration: %q", t.config.Connection)
@@ -629,9 +647,16 @@ func (t *TrackerDamon) Start() error {
 			return fmt.Errorf("start failed on default configuration error: %w", err)
 		}
 	}
-	t.iface.ApplyState("off")
-	t.iface.ApplyAttrs(t.config)
-	t.applyPids()
+
+	if err := t.iface.ApplyState("off"); err != nil {
+		return fmt.Errorf("start failed on switchoff sysfs: %w", err)
+	}
+	if err := t.iface.ApplyAttrs(t.config); err != nil {
+		return fmt.Errorf("start failed on ApplyAttrs: %w", err)
+	}
+	if err := t.applyPids(); err != nil {
+		return fmt.Errorf("start failed on applyPids: %w", err)
+	}
 
 	// Even if damon start monitor fails, the tracker state is
 	// "started" from this point on. That is, removing bad pids
@@ -647,7 +672,8 @@ func (t *TrackerDamon) Start() error {
 	}
 	// Establish connection to monitoring processes.
 	if err := t.updateKdamondConnection(); err != nil {
-		t.iface.ApplyState("off") // ignore error, starting has failed already.
+		//nolint:errcheck //ignore error as starting has failed already.
+		t.iface.ApplyState("off")
 		return fmt.Errorf("TrackerDamon.Start: %w", err)
 	}
 	return nil
@@ -658,8 +684,7 @@ func (t *TrackerDamon) Stop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	log.Debugf("TrackerDamon.Stop()")
-	// Never mind about error: may cause "Operation not permitted"
-	// if monitoring was already off.
+	//nolint:errcheck //ignore error that may cause "Operation not permitted" if monitoring was already off.
 	t.iface.ApplyState("off")
 	t.started = false
 	if t.toPerfReader != nil {
@@ -738,7 +763,7 @@ func (t *TrackerDamon) bpftraceParser(bpftraceOutput *bufio.Reader) {
 		}
 		stats.Store(StatsHeartbeat{"TrackerDamon.bpftraceParser.line"})
 		pid := t.iface.AggregatedPid(kdamondPid, targetID)
-		t.storeAggregated(pid, start, end, nrAccesses, age)
+		_ = t.storeAggregated(pid, start, end, nrAccesses, age)
 	}
 	log.Debugf("TrackerDamon.bpftraceParser: exit")
 }
@@ -818,7 +843,7 @@ func (t *TrackerDamon) bpftraceReader() error {
 				log.Debugf("TrackerDamon.bpftraceReader: bpftrace kill error: %s\n", err)
 			} else {
 				log.Debugf("TrackerDamon.bpftraceReader: bpftrace signaled, waiting to terminate")
-				cmd.Wait()
+				_ = cmd.Wait()
 				log.Debugf("TrackerDamon.bpftraceReader: bpftrace terminated")
 			}
 		}
@@ -891,7 +916,7 @@ func (t *TrackerDamon) perfReader() error {
 			quit = true
 		}
 	}
-	cmd.Wait()
+	_ = cmd.Wait()
 	return nil
 }
 
@@ -1073,7 +1098,7 @@ func (t *TrackerDamon) perfHandleLine(line string) error {
 	}
 	age := uint(0)
 	/* age is not parsed */
-	t.storeAggregated(pid, start, end, uint(nrAccesses), age)
+	_ = t.storeAggregated(pid, start, end, uint(nrAccesses), age)
 	return nil
 }
 
