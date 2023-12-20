@@ -202,6 +202,7 @@ func (ar *AddrRanges) ProcessMadvise(advise int) error {
 	if pidfd < 0 || err != nil {
 		return fmt.Errorf("pidfd_open error: %s", err)
 	}
+	//nolint:errcheck //ignore the err check for PidfdCloseSyscall()
 	defer PidfdCloseSyscall(pidfd)
 	sysRet, errno, err := ProcessMadviseSyscall(pidfd, ar.Ranges(), advise, 0)
 	if stats != nil {

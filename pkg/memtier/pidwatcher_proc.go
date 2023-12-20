@@ -50,7 +50,7 @@ func NewPidWatcherProc() (PidWatcher, error) {
 	}
 	// This pidwatcher is expected to work out-of-the-box without
 	// any configuration. Set the defaults immediately.
-	w.SetConfigJSON("")
+	_ = w.SetConfigJSON("")
 	return w, nil
 }
 
@@ -216,6 +216,7 @@ func (w *PidWatcherProc) loop(singleshot bool) {
 		}
 
 		// Wait for next tick.
+		//nolint:gosimple //allow `select` with a single case
 		select {
 		case <-ticker.C:
 			continue

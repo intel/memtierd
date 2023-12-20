@@ -83,7 +83,7 @@ func (hf *HeatForecasterStdio) Forecast(heats *Heats) (*Heats, error) {
 	if heats == nil {
 		return nil, nil
 	}
-	hf.sendCurrentHeats(heats, hf.config.Retry, []byte{})
+	_ = hf.sendCurrentHeats(heats, hf.config.Retry, []byte{})
 	log.Debugf("forecast heats for %d processes sent", len(*heats))
 	newHeats := &Heats{}
 	if err := hf.jsonout.Decode(&newHeats); err != nil {
@@ -129,6 +129,7 @@ func (hf *HeatForecasterStdio) startProcess(config *HeatForecasterStdioConfig) e
 	hf.jsonout = json.NewDecoder(hf.stdout)
 	// Call Wait() to make sure that hf.process.ProcessState will
 	// be updated when process exits.
+	//nolint:errcheck //ignore the err check for "go func()"
 	go hf.process.Wait()
 	return nil
 }
@@ -160,7 +161,7 @@ func (hf *HeatForecasterStdio) sendCurrentHeats(heats *Heats, triesLeft int, mar
 		}
 		return hf.sendCurrentHeats(heats, triesLeft-1, data)
 	}
-	hf.stdin.Write([]byte("\n"))
+	_, _ = hf.stdin.Write([]byte("\n"))
 	hf.stdin.Flush()
 	return nil
 }

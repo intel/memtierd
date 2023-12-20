@@ -221,6 +221,7 @@ func (w *PidWatcherCgroups) loop(singleshot bool) {
 		}
 
 		// Wait for next tick.
+		//nolint:gosimple //allow `select` with a single case
 		select {
 		case <-ticker.C:
 			continue
@@ -261,7 +262,7 @@ func findFiles(root string, filename string) []string {
 		warnedOnBadPath = map[string]bool{}
 	}
 	matchingFiles := []string{}
-	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -270,6 +271,10 @@ func findFiles(root string, filename string) []string {
 		}
 		return nil
 	})
+	if err != nil {
+		log.Errorf("filepath.WalkDir failed with error %v", err)
+		return nil
+	}
 	if len(matchingFiles) == 0 && !warnedOnBadPath[root] {
 		warnedOnBadPath[root] = true
 		log.Warnf("PidWatcherCgroups: invalid path %q\n", root)

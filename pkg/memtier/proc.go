@@ -23,6 +23,7 @@ import (
 	"strings"
 )
 
+//nolint:golint //ignore the variables' naming as they are from Linux kernel code
 const (
 	// /proc/pid/pagemap bits
 	// from fs/proc/task_mmu.c
@@ -99,25 +100,29 @@ const (
 	KPF_PGTABLE        = uint64(0x1) << 26
 )
 
-type procMemFile struct {
+// ProcMemFile represents a structure for managing a file associated with process memory.
+type ProcMemFile struct {
 	osFile  *os.File
 	bufSize uint64
 	pos     uint64
 }
 
-type procPagemapFile struct {
+// ProcPagemapFile represents a structure for managing a file associated with proc pagemap.
+type ProcPagemapFile struct {
 	osFile    *os.File
 	readahead int
 	pos       int64
 }
 
-type procKpageflagsFile struct {
+// ProcKpageflagsFile represents a structure for managing a file associated with kpage flags.
+type ProcKpageflagsFile struct {
 	osFile    *os.File
 	readahead int
 	readCache map[int64]uint64
 }
 
-type procPageIdleBitmapFile struct {
+// ProcPageIdleBitmapFile represents a structure for managing a file associated with proc page idle bitmaps.
+type ProcPageIdleBitmapFile struct {
 	osFile    *os.File
 	readahead int
 	readCache map[int64]uint64
@@ -173,22 +178,22 @@ func procReadInt(path string) (int, error) {
 	return n, nil
 }
 
-func ProcMemOpen(pid int) (*procMemFile, error) {
+func ProcMemOpen(pid int) (*ProcMemFile, error) {
 	path := fmt.Sprintf("/proc/%d/mem", pid)
 	osFile, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
-	return &procMemFile{osFile, 64 * constUPagesize, 0}, nil
+	return &ProcMemFile{osFile, 64 * constUPagesize, 0}, nil
 }
 
-func (f *procMemFile) Close() error {
+func (f *ProcMemFile) Close() error {
 	return f.osFile.Close()
 }
 
 // ReadNoData reads one byte from every page in the address range
 // to force each page in memory.
-func (f *procMemFile) ReadNoData(startAddr, endAddr uint64) error {
+func (f *ProcMemFile) ReadNoData(startAddr, endAddr uint64) error {
 	buf := make([]byte, f.bufSize)
 	for startAddr < endAddr {
 		readLen := len(buf)
@@ -212,16 +217,16 @@ func (f *procMemFile) ReadNoData(startAddr, endAddr uint64) error {
 	return nil
 }
 
-func ProcKpageflagsOpen() (*procKpageflagsFile, error) {
+func ProcKpageflagsOpen() (*ProcKpageflagsFile, error) {
 	path := "/proc/kpageflags"
 	osFile, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
-	return &procKpageflagsFile{osFile, 256, map[int64]uint64{}}, nil
+	return &ProcKpageflagsFile{osFile, 256, map[int64]uint64{}}, nil
 }
 
-func (f *procKpageflagsFile) SetReadahead(pages int) {
+func (f *ProcKpageflagsFile) SetReadahead(pages int) {
 	f.readahead = pages
 	if pages > 0 {
 		f.readCache = map[int64]uint64{}
@@ -232,7 +237,7 @@ func (f *procKpageflagsFile) SetReadahead(pages int) {
 
 // ReadFlags returns 64-bit set of flags from /proc/kpageflags
 // for a page indexed by page frame number (PFN).
-func (f *procKpageflagsFile) ReadFlags(pfn uint64) (uint64, error) {
+func (f *ProcKpageflagsFile) ReadFlags(pfn uint64) (uint64, error) {
 	kpfFileOffset := int64(pfn * 8)
 	if f.readCache != nil {
 		if flags, ok := f.readCache[kpfFileOffset]; ok {
@@ -266,26 +271,26 @@ func (f *procKpageflagsFile) ReadFlags(pfn uint64) (uint64, error) {
 	return flags, nil
 }
 
-func (f *procKpageflagsFile) Close() {
+func (f *ProcKpageflagsFile) Close() {
 	f.osFile.Close()
 }
 
 // ProcPageIdleBitmapOpen returns opened page_idle/bitmap file
-func ProcPageIdleBitmapOpen() (*procPageIdleBitmapFile, error) {
+func ProcPageIdleBitmapOpen() (*ProcPageIdleBitmapFile, error) {
 	path := "/sys/kernel/mm/page_idle/bitmap"
 	osFile, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
-	return &procPageIdleBitmapFile{osFile, 8, map[int64]uint64{}}, nil
+	return &ProcPageIdleBitmapFile{osFile, 8, map[int64]uint64{}}, nil
 }
 
-func (f *procPageIdleBitmapFile) Close() {
+func (f *ProcPageIdleBitmapFile) Close() {
 	f.osFile.Close()
 	f.osFile = nil
 }
 
-func (f *procPageIdleBitmapFile) SetReadahead(chunks int) {
+func (f *ProcPageIdleBitmapFile) SetReadahead(chunks int) {
 	f.readahead = chunks
 	if chunks > 0 {
 		f.readCache = map[int64]uint64{}
@@ -294,17 +299,17 @@ func (f *procPageIdleBitmapFile) SetReadahead(chunks int) {
 	}
 }
 
-func (f *procPageIdleBitmapFile) SetIdle(pfn uint64) error {
+func (f *ProcPageIdleBitmapFile) SetIdle(pfn uint64) error {
 	pfnBitOffset := pfn % 64
 	idleMask := uint64(0x1) << pfnBitOffset
 	return f.WriteBits(pfn, idleMask)
 }
 
-func (f *procPageIdleBitmapFile) SetIdleAll(pfn uint64) error {
+func (f *ProcPageIdleBitmapFile) SetIdleAll(pfn uint64) error {
 	return f.WriteBits(pfn, uint64(0xffffffffffffffff))
 }
 
-func (f *procPageIdleBitmapFile) WriteBits(pfn uint64, bits uint64) error {
+func (f *ProcPageIdleBitmapFile) WriteBits(pfn uint64, bits uint64) error {
 	pfnFileOffset := int64(pfn) / 64 * 8
 	if _, err := f.osFile.Seek(pfnFileOffset, io.SeekStart); err != nil {
 		return err
@@ -322,7 +327,7 @@ func (f *procPageIdleBitmapFile) WriteBits(pfn uint64, bits uint64) error {
 	return nil
 }
 
-func (f *procPageIdleBitmapFile) ReadBits(pfn uint64) (uint64, error) {
+func (f *ProcPageIdleBitmapFile) ReadBits(pfn uint64) (uint64, error) {
 	pfnFileOffset := int64(pfn) / 64 * 8
 	if f.readCache != nil {
 		if bits, ok := f.readCache[pfnFileOffset]; ok {
@@ -357,7 +362,7 @@ func (f *procPageIdleBitmapFile) ReadBits(pfn uint64) (uint64, error) {
 	return bits, nil
 }
 
-func (f *procPageIdleBitmapFile) GetIdle(pfn uint64) (bool, error) {
+func (f *ProcPageIdleBitmapFile) GetIdle(pfn uint64) (bool, error) {
 	pfnBitOffset := pfn % 64
 	bits, err := f.ReadBits(pfn)
 	if err != nil {
@@ -368,7 +373,7 @@ func (f *procPageIdleBitmapFile) GetIdle(pfn uint64) (bool, error) {
 }
 
 // ProcPagemapOpen returns opened pagemap file for a process
-func ProcPagemapOpen(pid int) (*procPagemapFile, error) {
+func ProcPagemapOpen(pid int) (*ProcPagemapFile, error) {
 	path := "/proc/" + strconv.Itoa(pid) + "/pagemap"
 	osFile, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
@@ -379,17 +384,17 @@ func ProcPagemapOpen(pid int) (*procPagemapFile, error) {
 	// based on a performance test on a vm. 1k buffer (16 B/page *
 	// 64 pages) performed better than 512B or 4k).
 	defaultReadahead := 63
-	return &procPagemapFile{osFile, defaultReadahead, 0}, nil
+	return &ProcPagemapFile{osFile, defaultReadahead, 0}, nil
 }
 
-func (f *procPagemapFile) Close() {
+func (f *ProcPagemapFile) Close() {
 	if f.osFile != nil {
 		f.osFile.Close()
 		f.osFile = nil
 	}
 }
 
-func (f *procPagemapFile) SetReadahead(pages int) {
+func (f *ProcPagemapFile) SetReadahead(pages int) {
 	f.readahead = pages
 }
 
@@ -406,7 +411,7 @@ func (f *procPagemapFile) SetReadahead(pages int) {
 //     0 (continue): ForEachPage continues reading the next page attributes.
 //     -1 (break):   ForEachPage returns immediately.
 //     n > 0 (skip): ForEachPage will skip reading next n pages.
-func (f *procPagemapFile) ForEachPage(addressRanges []AddrRange, pageAttributes uint64, handlePage func(uint64, uint64) int) error {
+func (f *ProcPagemapFile) ForEachPage(addressRanges []AddrRange, pageAttributes uint64, handlePage func(uint64, uint64) int) error {
 	// Filter pages based on pagemap bits without calling handlePage.
 	// TODO: this is not complete!
 	pageMustBePresent := (pageAttributes&PMPresentSet == PMPresentSet)

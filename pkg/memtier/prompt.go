@@ -105,7 +105,7 @@ func (p *Prompt) output(format string, a ...interface{}) {
 	if p.w == nil {
 		return
 	}
-	p.w.WriteString(fmt.Sprintf(format, a...))
+	_, _ = p.w.WriteString(fmt.Sprintf(format, a...))
 	p.w.Flush()
 }
 
@@ -174,7 +174,7 @@ func (p *Prompt) RunCmdString(cmdString string) CommandStatus {
 	if pipeCmd != "" {
 		p.w.Flush()
 		pipeInput.Close()
-		pipeProcess.Wait()
+		_ = pipeProcess.Wait()
 		p.w = origOutputWriter
 	}
 	return runRv
@@ -485,7 +485,7 @@ func (p *Prompt) cmdSwap(args []string) CommandStatus {
 			swapped := 0
 			vaddrStart := uint64(0)
 			vaddrEnd := uint64(0)
-			pmFile.ForEachPage(ar.Ranges(), 0,
+			_ = pmFile.ForEachPage(ar.Ranges(), 0,
 				func(pmBits, pageAddr uint64) int {
 					pages++
 					if (pmBits>>PMB_SWAP)&1 == 0 {
@@ -679,7 +679,7 @@ PGTABLE       %d
 		defer pmFile.Close()
 		printed := 0
 		p.output("bits: softdirty, exclusive, uffd_wp, file, swap, present\n")
-		pmFile.ForEachPage(ar.Ranges(), 0,
+		_ = pmFile.ForEachPage(ar.Ranges(), 0,
 			func(pmBits, pageAddr uint64) int {
 				p.output("%x: bits: %d%d%d%d%d%d pfn: %d\n",
 					pageAddr,
@@ -766,7 +766,10 @@ func (p *Prompt) cmdMover(args []string) CommandStatus {
 		p.mover.Stop()
 	}
 	if *start {
-		p.mover.Start()
+		if err := p.mover.Start(); err != nil {
+			p.output("mover start error: %v", err)
+			return csOk
+		}
 	}
 	if *pause {
 		p.mover.Pause()
@@ -878,10 +881,14 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 		p.pidwatcher.Stop()
 	}
 	if *start {
-		p.pidwatcher.Start()
+		if err := p.pidwatcher.Start(); err != nil {
+			p.output("pidwatcher start error: %v", err)
+		}
 	}
 	if *poll {
-		p.pidwatcher.Poll()
+		if err := p.pidwatcher.Poll(); err != nil {
+			p.output("pidwatcher poll error: %v", err)
+		}
 	}
 	if *dump {
 		p.output("%s\n", p.pidwatcher.Dump(remainder))
