@@ -11,6 +11,10 @@ on:
         required: false
         type: boolean
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   trivy-scan-licenses:
     runs-on: ubuntu-22.04
