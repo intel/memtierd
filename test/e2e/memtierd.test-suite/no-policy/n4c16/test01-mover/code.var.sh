@@ -132,8 +132,12 @@ MEME_PIDS=("${MEME0_PID}" "${MEME1_PID}" "${MEME2_PID}")
 MEMTIERD_YAML=""
 memtierd-start
 
-# the 1st time swapping out with -mover option for the three meme processes
-memtierd-command "mover -config {\"IntervalMs\":10,\"Bandwidth\":10}\nswap -out -pids ${MEME0_PID},${MEME1_PID},${MEME2_PID} -mover\nmover -wait"
+vm-command "mkdir -p /sys/fs/cgroup/e2e-meme; echo ${MEME2_PID} > /sys/fs/cgroup/e2e-meme/cgroup.procs"
+
+
+# the 1st time swapping out with -mover option for the three meme processes.
+# Test all methods to give PIDs to swap: -pid, -pids and -pid-cgroups.
+memtierd-command "mover -config {\"IntervalMs\":10,\"Bandwidth\":10}\nswap -out -pids ${MEME0_PID} -pid ${MEME1_PID} -pid-cgroups /sys/fs/cgroup/e2e-meme -mover\nmover -wait"
 
 # As mover handles the multiple pids' tasks one by one, thus, set the max_seconds four times greater and set the min_seconds as 0
 for MEME_PID in "${MEME_PIDS[@]}"; do
