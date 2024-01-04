@@ -18,11 +18,13 @@ package memtier
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -54,6 +56,7 @@ type Prompt struct {
 	quit         bool
 	mutex        sync.Mutex
 	outputMutex  sync.Mutex
+	lastAddPids  []int
 }
 
 // CommandStatus represents the status of a command execution.
@@ -289,6 +292,7 @@ func (p *Prompt) cmdArange(args []string) CommandStatus {
 func (p *Prompt) cmdSwap(args []string) CommandStatus {
 	optPid := p.f.Int("pid", -1, "look for pages of PID")
 	optPids := p.f.String("pids", "", "-pids=PID[,PID...] act on all pids")
+	optPidCgroups := p.f.String("pid-cgroups", "", "-pid-cgroups=/path/to/cgroup[,CGPATH...]")
 	swapIn := p.f.Bool("in", false, "swap in selected ranges")
 	swapOut := p.f.Bool("out", false, "swap out selected ranges")
 	ranges := p.f.String("ranges", "", "-ranges=RANGE[,RANGE...] select ranges. RANGE syntax: STARTADDR (single page at STARTADDR), STARTADDR-ENDADDR, STARTADDR+SIZE[kMG].")
@@ -300,6 +304,51 @@ func (p *Prompt) cmdSwap(args []string) CommandStatus {
 		return csOk
 	}
 	allPids := []int{}
+	if *optPidCgroups != "" {
+		pw, err := NewPidWatcherCgroups()
+		if err != nil {
+			p.output("cannot create new pidwatcher cgroups: %s", err)
+			return csOk
+		}
+		cgPaths := []string{}
+		for _, cgPathWildcard := range strings.Split(*optPidCgroups, ",") {
+			paths, err := filepath.Glob(cgPathWildcard)
+			if err != nil {
+				p.output("bad wildcard %q", cgPathWildcard)
+				return csOk
+			}
+			cgPaths = append(cgPaths, paths...)
+		}
+		if len(cgPaths) == 0 {
+			p.output("could not find any matching cgroups\n")
+			return csOk
+		}
+		pwConfigJSON, err := json.Marshal(
+			PidWatcherCgroupsConfig{
+				IntervalMs: 1000,
+				Cgroups:    cgPaths,
+			},
+		)
+		if err != nil {
+			p.output("cannot marshal pidwatcher config: %s", err)
+			return csOk
+		}
+		if err := pw.SetConfigJSON(string(pwConfigJSON)); err != nil {
+			p.output("cannot set pidwatcher config %v: %s", pwConfigJSON, err)
+			return csOk
+		}
+		pw.SetPidListener(p)
+		p.lastAddPids = []int{}
+		if err := pw.Poll(); err != nil {
+			p.output("cannot poll pidwatcher: %s", err)
+			return csOk
+		}
+		if len(p.lastAddPids) == 0 {
+			p.output("could not find any pids from cgroups %v\n", cgPaths)
+			return csOk
+		}
+		allPids = append(allPids, p.lastAddPids...)
+	}
 	if *optPid != -1 {
 		allPids = append(allPids, *optPid)
 	}
@@ -315,7 +364,7 @@ func (p *Prompt) cmdSwap(args []string) CommandStatus {
 		}
 	}
 	if len(allPids) == 0 {
-		p.output("missing -pid=PID or -pids=PID[,PID...]\n")
+		p.output("missing pids, add -pid=PID, -pids=PID[,PID...] or -pid-cgroups PATH[,PATH...]\n")
 		return csOk
 	}
 	for _, pid := range allPids {
@@ -794,13 +843,14 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 // AddPids adds the specified process IDs (pids) to the Prompt's watch list.
 // It prints a log message indicating the added PIDs.
 func (p *Prompt) AddPids(pids []int) {
-	p.output("pidwatcher: AddPids(%v)", pids)
+	p.lastAddPids = pids
+	p.output("pidwatcher: AddPids(%v)\n", pids)
 }
 
 // RemovePids removes the specified process IDs (pids) from the Prompt's watch list.
 // It prints a log message indicating the removed PIDs.
 func (p *Prompt) RemovePids(pids []int) {
-	p.output("pidwatcher: RemovePids(%v)", pids)
+	p.output("pidwatcher: RemovePids(%v)\n", pids)
 }
 
 func (p *Prompt) cmdTracker(args []string) CommandStatus {
