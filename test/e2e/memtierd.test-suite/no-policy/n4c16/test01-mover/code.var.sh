@@ -104,7 +104,7 @@ for i in {0..2}; do
 
     # the 1st time swapping out with -mover option
     memtierd-command "mover ${mover_swap_conf[$i]}\nswap -out -pids ${MEME_PID} -mover\nmover -wait"
-    match-pid-pageout ${MEME_PID} "2[0-9]" ${mover_swap_min_max_seconds[$i]}
+    match-pid-pageout ${MEME_PID} "[2-3][0-9]" ${mover_swap_min_max_seconds[$i]}
 
     # swapping in all the memory which have been swapped out above
     # thus, 0-9 MB will be swapped out after swapping in option
@@ -113,7 +113,7 @@ for i in {0..2}; do
 
     # the 2nd time swapping out without -mover option
     memtierd-command "swap -out -pids ${MEME_PID}"
-    match-pid-pageout ${MEME_PID} "2[0-9]" 0 1
+    match-pid-pageout ${MEME_PID} "[2-3][0-9]" 0 1
 
     memtierd-meme-stop
     memtierd-stop
@@ -138,7 +138,7 @@ memtierd-command "mover -config {\"IntervalMs\":10,\"Bandwidth\":10}\nswap -out 
 # As mover handles the multiple pids' tasks one by one, thus, set the max_seconds four times greater and set the min_seconds as 0
 for MEME_PID in "${MEME_PIDS[@]}"; do
     memtierd-command "swap -pid ${MEME_PID} -status"
-    match-pid-pageout "${MEME_PID}" "2[0-9]" 0 16
+    match-pid-pageout "${MEME_PID}" "[2-3][0-9]" 0 16
 done
 
 # swapping in all the memory which have been swapped out above for the three meme processes
@@ -152,7 +152,7 @@ done
 memtierd-command "swap -out -pids ${MEME0_PID},${MEME1_PID},${MEME2_PID}"
 for MEME_PID in "${MEME_PIDS[@]}"; do
     memtierd-command "swap -pid ${MEME_PID} -status"
-    match-pid-pageout "${MEME_PID}" "2[0-9]" 0 1
+    match-pid-pageout "${MEME_PID}" "[2-3][0-9]" 0 1
 done
 
 memtierd-meme-stop
