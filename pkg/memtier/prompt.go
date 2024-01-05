@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Cmd represents a command with a description and a function to execute.
@@ -57,6 +58,7 @@ type Prompt struct {
 	mutex        sync.Mutex
 	outputMutex  sync.Mutex
 	lastAddPids  []int
+	stopwatches  map[string]float64
 }
 
 // CommandStatus represents the status of a command execution.
@@ -73,10 +75,11 @@ const (
 // NewPrompt creates a new interactive prompt with the given prompt string and I/O readers/writers.
 func NewPrompt(ps1 string, reader *bufio.Reader, writer *bufio.Writer) *Prompt {
 	p := Prompt{
-		r:     reader,
-		w:     writer,
-		ps1:   ps1,
-		mover: NewMover(),
+		r:           reader,
+		w:           writer,
+		ps1:         ps1,
+		mover:       NewMover(),
+		stopwatches: make(map[string]float64),
 	}
 	p.cmds = map[string]Cmd{
 		"q":          {"quit interactive prompt.", p.cmdQuit},
@@ -89,6 +92,7 @@ func NewPrompt(ps1 string, reader *bufio.Reader, writer *bufio.Writer) *Prompt {
 		"mover":      {"manage mover, move selected pages.", p.cmdMover},
 		"policy":     {"manage policy, start/stop memory tiering.", p.cmdPolicy},
 		"routines":   {"manage routines.", p.cmdRoutines},
+		"time":       {"print timestamps or elapsed time.", p.cmdTime},
 		"help":       {"print help.", p.cmdHelp},
 		"nop":        {"no operation.", p.cmdNop},
 	}
@@ -235,6 +239,51 @@ func sortedNodeKeys(m map[Node]uint) []Node {
 }
 
 func (p *Prompt) cmdNop(args []string) CommandStatus {
+	return csOk
+}
+
+func (p *Prompt) cmdTime(args []string) CommandStatus {
+	optStart := p.f.String("start", "", "-start NAME[,NAME...] starts/restarts stopwatch NAME")
+	optElapsed := p.f.String("elapsed", "", "-elapsed NAME[,NAME] prints time elapsed since starting stopwatch NAME")
+	optStop := p.f.String("stop", "", "-stop NAME[,NAME...] stops stopwatch NAME")
+	optNow := p.f.Bool("now", false, "print current time")
+	optSleep := p.f.Float64("sleep", 0.0, "-sleep TIME sleeps given time in seconds")
+	if err := p.f.Parse(args); err != nil {
+		return csOk
+	}
+	t := time.Now()
+	unixTimeFloat := float64(t.UnixNano()) / 1e9
+	if *optNow {
+		p.output("%.6f\n", unixTimeFloat)
+	}
+	if *optStart != "" {
+		for _, stopwatch := range strings.Split(*optStart, ",") {
+			p.stopwatches[stopwatch] = unixTimeFloat
+			p.output("stopwatch %q started %.6f\n", stopwatch, unixTimeFloat)
+		}
+	}
+	if *optElapsed != "" {
+		for _, stopwatch := range strings.Split(*optElapsed, ",") {
+			if started, ok := p.stopwatches[stopwatch]; ok {
+				p.output("%.6f\n", unixTimeFloat-started)
+			} else {
+				p.output("stopwatch %q not started\n", stopwatch)
+			}
+		}
+	}
+	if *optStop != "" {
+		for _, stopwatch := range strings.Split(*optStop, ",") {
+			if started, ok := p.stopwatches[stopwatch]; ok {
+				p.output("stopwatch %q stopped at %.6f\n", stopwatch, unixTimeFloat-started)
+				delete(p.stopwatches, stopwatch)
+			} else {
+				p.output("stopwatch %q not started\n", stopwatch)
+			}
+		}
+	}
+	if *optSleep != 0.0 {
+		time.Sleep(time.Duration(*optSleep * float64(time.Second)))
+	}
 	return csOk
 }
 
