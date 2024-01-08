@@ -485,7 +485,7 @@ func (p *PolicyRatio) loop() {
 				}
 			}
 		}
-		log.Debugf("Ratio loop %v moved lengh: %v\n", n, calcLen)
+		log.Debugf("Ratio loop %v moved length: %v\n", n, calcLen)
 
 		// When the RatioTargets field is missing or set as [-1], swap out the memory calculated above
 		// Otherwise, move the memory to the target numa nodes
