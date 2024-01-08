@@ -233,7 +233,12 @@ func readPids(path string) ([]int, error) {
 	return pids, nil
 }
 
+var warnedOnBadPath map[string]bool
+
 func findFiles(root string, filename string) []string {
+	if warnedOnBadPath == nil {
+		warnedOnBadPath = map[string]bool{}
+	}
 	matchingFiles := []string{}
 	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -244,6 +249,10 @@ func findFiles(root string, filename string) []string {
 		}
 		return nil
 	})
+	if len(matchingFiles) == 0 && !warnedOnBadPath[root] {
+		warnedOnBadPath[root] = true
+		log.Warnf("PidWatcherCgroups: invalid path %q\n", root)
+	}
 	return matchingFiles
 }
 
