@@ -288,7 +288,9 @@ func (m *Mover) handleTask(task *MoverTask, intervalMs, bandwidth int) taskStatu
 			return tsError
 		}
 	}
+	m.mutex.Lock()
 	task.offset += count
+	m.mutex.Unlock()
 	if len(task.pages.Offset(count).Pages()) > 0 {
 		return tsContinue
 	}
@@ -325,7 +327,7 @@ func (m *Mover) Wait(thss ...MoverTaskHandlerStatus) <-chan MoverTaskHandlerStat
 	for _, ths := range thss {
 		if m.ths == ths {
 			// The status is already what is waited for.
-			go func() { c <- m.ths }()
+			go func() { c <- ths }()
 			return c
 		}
 	}
