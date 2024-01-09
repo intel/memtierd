@@ -34,15 +34,15 @@ command-start() {
     COMMAND="$3"
     COMMAND_STATUS=""
     COMMAND_OUTPUT=""
-    COMMAND_COUNTER=$(( COMMAND_COUNTER + 1 ))
+    COMMAND_COUNTER=$((COMMAND_COUNTER + 1))
     local command_start_time=$(epochrealtime)
     local time_since_start=$(echo "$command_start_time - $command_init_time" | bc)
     COMMAND_OUT_FILE="$COMMAND_OUTPUT_DIR/$(printf %04g $COMMAND_COUNTER)-$COMMAND_TARGET"
-    echo "# start time: $time_since_start" > "$COMMAND_OUT_FILE" || {
+    echo "# start time: $time_since_start" >"$COMMAND_OUT_FILE" || {
         echo "cannot write command output to file \"$COMMAND_OUT_FILE\""
         exit 1
     }
-    echo "# command: $COMMAND" >> "$COMMAND_OUT_FILE"
+    echo "# command: $COMMAND" >>"$COMMAND_OUT_FILE"
     echo -e -n "${COMMAND_PROMPT}"
     if [ -n "$PV" ]; then
         echo "$COMMAND" | $PV $speed
@@ -60,8 +60,12 @@ command-start() {
 
 command-handle-output() {
     # example: sh -c $command | command-handle-output
-    tee "$COMMAND_OUT_FILE.tmp" | ( echo -e -n "$COMMAND_OUTSTART"; cat; echo -e -n "$COMMAND_OUTEND" )
-    cat "$COMMAND_OUT_FILE.tmp" >> "$COMMAND_OUT_FILE"
+    tee "$COMMAND_OUT_FILE.tmp" | (
+        echo -e -n "$COMMAND_OUTSTART"
+        cat
+        echo -e -n "$COMMAND_OUTEND"
+    )
+    cat "$COMMAND_OUT_FILE.tmp" >>"$COMMAND_OUT_FILE"
     if [ -n "$PV" ]; then
         echo | $PV $speed
     fi
@@ -77,7 +81,10 @@ command-end() {
     COMMAND_STATUS=$1
     local command_end_time=$(epochrealtime)
     local time_since_start=$(echo "$command_end_time - $command_init_time" | bc)
-    ( echo "# exit status: $COMMAND_STATUS"; echo "# end time: $time_since_start" ) >> "$COMMAND_OUT_FILE"
+    (
+        echo "# exit status: $COMMAND_STATUS"
+        echo "# end time: $time_since_start"
+    ) >>"$COMMAND_OUT_FILE"
     COMMAND_OUTPUT=$(<"$COMMAND_OUT_FILE.tmp")
     rm -f "$COMMAND_OUT_FILE.tmp"
 }
@@ -87,10 +94,12 @@ command-error() { # script API
     #
     # Print executed command, observed output, exit status and MESSAGE.
     # Stop script execution.
-    ( echo "command:     $COMMAND";
-      echo "output:      $COMMAND_OUTPUT";
-      echo "exit status: $COMMAND_STATUS";
-      echo "error:       $1" ) >&2
+    (
+        echo "command:     $COMMAND"
+        echo "output:      $COMMAND_OUTPUT"
+        echo "exit status: $COMMAND_STATUS"
+        echo "error:       $1"
+    ) >&2
     command-exit-if-not-interactive
 }
 
@@ -107,7 +116,7 @@ command-debug-log() {
     else
         if [ -n "$OUTPUT_DIR" ] && [ -d "$OUTPUT_DIR" ]; then
             touch "$OUTPUT_DIR"/debug-log
-            echo "$@" >> "$OUTPUT_DIR"/debug-log
+            echo "$@" >>"$OUTPUT_DIR"/debug-log
             return 0
         fi
     fi

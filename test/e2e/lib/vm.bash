@@ -8,7 +8,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/distro.bash"
 VM_PROMPT=${VM_PROMPT-"\e[38;5;11mroot@vm>\e[0m "}
 
 vm-compose-govm-template() {
-    (echo "
+    (
+        echo "
 vms:
   - name: ${VM_NAME}
     image: ${VM_IMAGE}
@@ -23,12 +24,15 @@ $(for govm_env in $(distro-govm-env); do echo "
       #!/bin/bash
       set -e
 "
-     (if [ -n "$VM_EXTRA_BOOTSTRAP_COMMANDS" ]; then
-          # shellcheck disable=SC2001
-          sed 's/^/      /g' <<< "${VM_EXTRA_BOOTSTRAP_COMMANDS}"
-     fi
-      # shellcheck disable=SC2001
-      sed 's/^/      /g' <<< "$(distro-bootstrap-commands)")) |
+        (
+            if [ -n "$VM_EXTRA_BOOTSTRAP_COMMANDS" ]; then
+                # shellcheck disable=SC2001
+                sed 's/^/      /g' <<<"${VM_EXTRA_BOOTSTRAP_COMMANDS}"
+            fi
+            # shellcheck disable=SC2001
+            sed 's/^/      /g' <<<"$(distro-bootstrap-commands)"
+        )
+    ) |
         grep -E -v '^ *$'
 }
 
@@ -50,7 +54,6 @@ vm-ssh-user() {
     fi
 }
 
-
 vm-is-govm() { # script API
     local name="${1:-$VM_NAME}"
     # Usage: vm-is-govm [name]
@@ -59,7 +62,7 @@ vm-is-govm() { # script API
     # a govm-managed virtual machine. Returns 0 if it does. Returns 1
     # if it does not. Returns 2 if govm is not installed.
 
-    if ! type -f govm >& /dev/null; then
+    if ! type -f govm >&/dev/null; then
         return 2
     fi
     if [ -z "$name" ]; then
@@ -67,7 +70,7 @@ vm-is-govm() { # script API
     fi
 
     if govm ls | cut -d ' ' -f 2 | grep -q "^$name$"; then
-       return 0
+        return 0
     fi
 
     return 1
@@ -87,7 +90,7 @@ vm-check-env() {
         return 0
     fi
     # Check that VM created/managed with govm in this environment.
-    type -p govm >& /dev/null || {
+    type -p govm >&/dev/null || {
         echo "ERROR:"
         echo "ERROR: environment check failed:"
         echo "ERROR:   govm binary not found."
@@ -103,7 +106,7 @@ vm-check-env() {
         echo "ERROR:"
         return 1
     }
-    docker inspect govm/govm >& /dev/null || {
+    docker inspect govm/govm >&/dev/null || {
         echo "ERROR:"
         echo "ERROR: environment check failed:"
         echo "ERROR:   govm/govm docker image not present (but govm needs it)."
@@ -129,8 +132,8 @@ vm-check-env() {
         return 1
     fi
     if [ -n "$SSH_AUTH_SOCK" ] && [ -e "$SSH_AUTH_SOCK" ]; then
-        if ! ssh-add -l | grep -q "$(ssh-keygen -l -f "$SSH_KEY" < /dev/null 2>/dev/null | awk '{print $2}')"; then
-            if ! ssh-add "$SSH_KEY" < /dev/null; then
+        if ! ssh-add -l | grep -q "$(ssh-keygen -l -f "$SSH_KEY" </dev/null 2>/dev/null | awk '{print $2}')"; then
+            if ! ssh-add "$SSH_KEY" </dev/null; then
                 echo "ERROR:"
                 echo "ERROR: environment setup failed:"
                 echo "ERROR:   Failed to load $SSH_KEY SSH key to agent."
@@ -164,7 +167,7 @@ vm-check-running-binary() {
     local bin_name
     bin_name="$(basename "$bin_file")"
     pid_of_bin="$(vm-command-q "pidof $bin_name")"
-    if [ -f "$bin_file" ] && [ -n "$pid_of_bin" ] && [ "$(vm-command-q "md5sum < /proc/$pid_of_bin/exe")" != "$(md5sum < "$bin_file")" ]; then
+    if [ -f "$bin_file" ] && [ -n "$pid_of_bin" ] && [ "$(vm-command-q "md5sum < /proc/$pid_of_bin/exe")" != "$(md5sum <"$bin_file")" ]; then
         echo "WARNING:"
         echo "WARNING: Running $bin_name binary is different from"
         echo "WARNING: $bin_file"
@@ -205,12 +208,13 @@ vm-command() { # script API
     #   vm-command "whoami | grep myuser" || command-error "user is not myuser"
     command-start "vm" "$VM_PROMPT" "$1"
     if [ "$2" == "bg" ]; then
-        ( $SSH "${VM_SSH_USER}@${VM_IP}" sudo bash -l <<<"$COMMAND" 2>&1 | command-handle-output ;
-          command-end "${PIPESTATUS[0]}"
+        (
+            $SSH "${VM_SSH_USER}@${VM_IP}" sudo bash -l <<<"$COMMAND" 2>&1 | command-handle-output
+            command-end "${PIPESTATUS[0]}"
         ) &
         command-runs-in-bg
     else
-        $SSH "${VM_SSH_USER}@${VM_IP}" sudo bash -l <<<"$COMMAND" 2>&1 | command-handle-output ;
+        $SSH "${VM_SSH_USER}@${VM_IP}" sudo bash -l <<<"$COMMAND" 2>&1 | command-handle-output
         command-end "${PIPESTATUS[0]}"
     fi
     return "$COMMAND_STATUS"
@@ -229,11 +233,11 @@ vm-ssh-user-ip() {
     local node_ssh_user=""
     local node_ssh_ip=""
     if [[ "$NODE" == *"@"* ]]; then
-        node_ssh_ip=${NODE/*@}
+        node_ssh_ip=${NODE/*@/}
         node_ssh_user=${NODE%@*}
     else
         node_ssh_ip=$(${GOVM} ls | awk "/$NODE/{print \$4}")
-        node_ssh_user=$( host-get-vm-config $NODE && echo $VM_SSH_USER )
+        node_ssh_user=$(host-get-vm-config $NODE && echo $VM_SSH_USER)
     fi
     if [ -z "$node_ssh_ip" ]; then
         error "cannot find IP address for NODE=$NODE"
@@ -274,7 +278,7 @@ vm-join-cmd() {
     local k8s_join_cmd=""
     master_user_ip="$(vm-ssh-user-ip $MASTER_NODE)"
     local ssh_get_join_cmd="ssh $master_user_ip sudo kubeadm token create --print-join-command"
-    k8s_join_cmd="$( $ssh_get_join_cmd )"
+    k8s_join_cmd="$($ssh_get_join_cmd)"
     if [[ "$k8s_join_cmd" != *" join "* ]]; then
         error "failed to get kubeadm join command: $k8s_join_cmd"
     fi
@@ -300,11 +304,11 @@ vm-mem-hotplug() { # script API
         error "unplugged memory matching '$memmatch' not found"
         return 1
     fi
-    memid="$(awk '{print $1}' <<< "$memline")"
+    memid="$(awk '{print $1}' <<<"$memline")"
     memid=${memid#mem}
     memid=${memid%[: ]*}
-    memdimm="$(awk '{print $2}' <<< "$memline")"
-    memnode="$(awk '{print $4}' <<< "$memline")"
+    memdimm="$(awk '{print $2}' <<<"$memline")"
+    memnode="$(awk '{print $4}' <<<"$memline")"
     memnode=${memnode#node}
     if [ "$memdimm" == "nvdimm" ]; then
         memdriver="nvdimm"
@@ -333,10 +337,10 @@ vm-mem-hotremove() { # script API
         error "plugged memory matching '$memmatch' not found"
         return 1
     fi
-    memid="$(awk '{print $1}' <<< "$memline")"
+    memid="$(awk '{print $1}' <<<"$memline")"
     memid=${memid#mem}
     memid=${memid%[: ]*}
-    memdimm="$(awk '{print $2}' <<< "$memline")"
+    memdimm="$(awk '{print $2}' <<<"$memline")"
     vm-monitor "device_del ${memdimm}${memid}"
 }
 
@@ -345,7 +349,10 @@ vm-mem-hw() { # script API
     #
     # List VM memory hardware with current status.
     # See also: vm-mem-hotplug, vm-mem-hotremove
-    vm-monitor "$(echo info memdev; echo info memory-devices)" | awk '
+    vm-monitor "$(
+        echo info memdev
+        echo info memory-devices
+    )" | awk '
       /memdev: /{
           split($2,a,"_");
           state[a[2]]="plugged  ";
@@ -389,7 +396,7 @@ vm-monitor() { # script API
     #   vm-monitor "device_add pc-dimm,id=nvdimm0,memdev=nvmem0,node=1"
     [ -n "$VM_MONITOR" ] ||
         error "VM is not running"
-    eval "$VM_MONITOR" <<< "$1" | sed 's/\r//g'
+    eval "$VM_MONITOR" <<<"$1" | sed 's/\r//g'
     if [ "${PIPESTATUS[0]}" != "0" ]; then
         error "sending command to Qemu monitor failed"
     fi
@@ -406,18 +413,18 @@ vm-wait-process() { # script API
     timeout=30
     while [ "${1#-}" != "$1" ] && [ -n "$1" ]; do
         case "$1" in
-            --timeout)
-                timeout="$2"
-                shift 2
-                ;;
-            --pidfile)
-                pidfile="$2"
-                shift 2
-                ;;
-            *)
-                invalid="${invalid}${invalid:+,}\"$1\""
-                shift
-                ;;
+        --timeout)
+            timeout="$2"
+            shift 2
+            ;;
+        --pidfile)
+            pidfile="$2"
+            shift 2
+            ;;
+        *)
+            invalid="${invalid}${invalid:+,}\"$1\""
+            shift
+            ;;
         esac
     done
     if [ -n "$invalid" ]; then
@@ -430,8 +437,8 @@ vm-wait-process() { # script API
     # As we first wait for the process, and then wait for the pidfile (if enabled)
     # we might wait longer than expected. Accept that anomaly atm.
     if [ ! -z "$pidfile" ]; then
-	vm-run-until --timeout $timeout "[ ! -z \"\$(fuser $pidfile 2>/dev/null)\" ]" || error "timeout while waiting $pidfile"
-	vm-run-until --timeout $timeout "[ \$(fuser $pidfile 2>/dev/null) -eq \$(pidof $process) ]" || error "timeout while waiting $process and $pidfile"
+        vm-run-until --timeout $timeout "[ ! -z \"\$(fuser $pidfile 2>/dev/null)\" ]" || error "timeout while waiting $pidfile"
+        vm-run-until --timeout $timeout "[ \$(fuser $pidfile 2>/dev/null) -eq \$(pidof $process) ]" || error "timeout while waiting $process and $pidfile"
     fi
 }
 
@@ -444,14 +451,15 @@ vm-run-until() { # script API
     timeout=30
     while [ "${1#-}" != "$1" ] && [ -n "$1" ]; do
         case "$1" in
-            --timeout)
-                timeout="$2"
-                shift; shift
-                ;;
-            *)
-                invalid="${invalid}${invalid:+,}\"$1\""
-                shift
-                ;;
+        --timeout)
+            timeout="$2"
+            shift
+            shift
+            ;;
+        *)
+            invalid="${invalid}${invalid:+,}\"$1\""
+            shift
+            ;;
         esac
     done
     if [ -n "$invalid" ]; then
@@ -486,18 +494,18 @@ vm-put-file() { # script API
     local cleanup append invalid
     while [ "${1#-}" != "$1" ] && [ -n "$1" ]; do
         case "$1" in
-            --cleanup)
-                cleanup=1
-                shift
-                ;;
-            --append)
-                append=1
-                shift
-                ;;
-            *)
-                invalid="${invalid}${invalid:+,}\"$1\""
-                shift
-                ;;
+        --cleanup)
+            cleanup=1
+            shift
+            ;;
+        --append)
+            append=1
+            shift
+            ;;
+        *)
+            invalid="${invalid}${invalid:+,}\"$1\""
+            shift
+            ;;
         esac
     done
     if [ -n "$cleanup" ] && [ -n "$1" ]; then
@@ -577,7 +585,7 @@ vm-pipe-to-file() { # script API
         append="--append"
         shift
     fi
-    cat > "$tmp"
+    cat >"$tmp"
     vm-put-file --cleanup $append "$tmp" "$1"
 }
 
@@ -634,7 +642,7 @@ vm-force-restart() { # script API
         vm-monitor system_reset
         host-wait-vm-ssh-server
     else
-      vm-reboot
+        vm-reboot
     fi
 }
 
@@ -657,7 +665,7 @@ vm-install-cri-resmgr() {
         vm-install-golang
         vm-install-pkg make
         vm-command "go get -d -v github.com/intel/cri-resource-manager"
-        CRI_RESMGR_SOURCE_DIR=$(awk '/package.*cri-resource-manager/{print $NF}' <<< "$COMMAND_OUTPUT")
+        CRI_RESMGR_SOURCE_DIR=$(awk '/package.*cri-resource-manager/{print $NF}' <<<"$COMMAND_OUTPUT")
         vm-command "cd $CRI_RESMGR_SOURCE_DIR && make install && cd -"
     elif [ "${binsrc#packages/}" != "$binsrc" ]; then
         suf=$(vm-pkg-type)
@@ -681,12 +689,12 @@ vm-install-cri-resmgr() {
         vm-put-file "$BIN_DIR/cri-resmgr" "$prefix/bin/cri-resmgr"
         vm-put-file "$BIN_DIR/cri-resmgr-agent" "$prefix/bin/cri-resmgr-agent"
         sed -E -e "s:__DEFAULTDIR__:$(distro-env-file-dir):g" \
-            -E -e "s:__BINDIR__:$prefix/bin:g" < "$HOST_PROJECT_DIR/cmd/cri-resmgr/cri-resource-manager.service.in" |
+            -E -e "s:__BINDIR__:$prefix/bin:g" <"$HOST_PROJECT_DIR/cmd/cri-resmgr/cri-resource-manager.service.in" |
             vm-pipe-to-file /usr/lib/systemd/system/cri-resource-manager.service
         cat <<EOF |
 CONFIG_OPTIONS="--fallback-config /etc/cri-resmgr/fallback.cfg -relay-socket ${cri_resmgr_sock} -runtime-socket ${cri_sock} -image-socket ${cri_sock}"
 EOF
-        vm-pipe-to-file "$(distro-env-file-dir)/cri-resource-manager"
+            vm-pipe-to-file "$(distro-env-file-dir)/cri-resource-manager"
         vm-put-file "$HOST_PROJECT_DIR/cmd/cri-resmgr/fallback.cfg.sample" "/etc/cri-resmgr/fallback.cfg"
     else
         error "vm-install-cri-resmgr: unknown binsrc=\"$binsrc\""
@@ -713,12 +721,13 @@ vm-cri-import-image() {
     local image_name="$1"
     local image_tar="$2"
     case "$VM_CRI" in
-        containerd)
-            vm-command "ctr -n k8s.io images import '$image_tar'" ||
-                command-error "failed to import \"$image_tar\" on VM"
-            ;;
-        *)
-            error "vm-cri-import-image unsupported container runtime: \"$VM_CRI\""
+    containerd)
+        vm-command "ctr -n k8s.io images import '$image_tar'" ||
+            command-error "failed to import \"$image_tar\" on VM"
+        ;;
+    *)
+        error "vm-cri-import-image unsupported container runtime: \"$VM_CRI\""
+        ;;
     esac
 }
 
@@ -738,13 +747,13 @@ vm-install-cri-resmgr-webhook() {
     fi
     echo "installing webhook to VM from image: $webhook_image_info"
     sleep 2
-    webhook_image_id="$(awk '{print $1}' <<< "$webhook_image_info")"
-    webhook_image_repotag="$(awk '{print $2}' <<< "$webhook_image_info")"
+    webhook_image_id="$(awk '{print $1}' <<<"$webhook_image_info")"
+    webhook_image_repotag="$(awk '{print $2}' <<<"$webhook_image_info")"
     webhook_image_tar="$(realpath "$OUTPUT_DIR/webhook-image-$webhook_image_id.tar")"
     # It is better to export (save) the image with image_repotag rather than image_id
     # because otherwise manifest.json RepoTags will be null and containerd will
     # remove the image immediately after impoting it as part of garbage collection.
-    docker image save "$webhook_image_repotag" > "$webhook_image_tar"
+    docker image save "$webhook_image_repotag" >"$webhook_image_tar"
     vm-put-file "$webhook_image_tar" "webhook/$(basename "$webhook_image_tar")" || {
         command-error "copying webhook image to VM failed"
     }
@@ -756,8 +765,8 @@ vm-install-cri-resmgr-webhook() {
     sed -e "s|IMAGE_PLACEHOLDER|$webhook_image_repotag|" \
         -e 's|^\(\s*\)tolerations:$|\1tolerations:\n\1  - {"key": "cmk", "operator": "Equal", "value": "true", "effect": "NoSchedule"}|g' \
         -e 's/imagePullPolicy: Always/imagePullPolicy: Never/' \
-        < "${HOST_PROJECT_DIR}/cmd/cri-resmgr-webhook/webhook-deployment.yaml" \
-        | vm-pipe-to-file webhook/webhook-deployment.yaml
+        <"${HOST_PROJECT_DIR}/cmd/cri-resmgr-webhook/webhook-deployment.yaml" |
+        vm-pipe-to-file webhook/webhook-deployment.yaml
     # Create secret that contains svc.crt and svc.key for webhook deployment
     local server_crt_b64 server_key_b64
     server_crt_b64="$(vm-command-q "cat webhook/server-crt.pem" | base64 -w 0)"
@@ -777,8 +786,8 @@ EOF
     local cabundle_b64
     cabundle_b64="$server_crt_b64"
     sed -e "s/CA_BUNDLE_PLACEHOLDER/${cabundle_b64}/" \
-        < "${HOST_PROJECT_DIR}/cmd/cri-resmgr-webhook/mutating-webhook-config.yaml" \
-        | vm-pipe-to-file webhook/mutating-webhook-config.yaml
+        <"${HOST_PROJECT_DIR}/cmd/cri-resmgr-webhook/mutating-webhook-config.yaml" |
+        vm-pipe-to-file webhook/mutating-webhook-config.yaml
 }
 
 vm-pkg-type() {
@@ -791,7 +800,7 @@ vm-install-pkg() {
 
 vm-setup-oneshot() {
     local util
-    ( distro-refresh-pkg-db ) || true
+    (distro-refresh-pkg-db) || true
     distro-setup-oneshot
     distro-install-utils
     # Verify that all required utilities exit on the VM.
@@ -856,7 +865,7 @@ vm-install-cri() {
 vm-install-containernetworking() {
     vm-install-golang
     vm-command "GO111MODULE=off go get -d github.com/containernetworking/plugins"
-    CNI_PLUGINS_SOURCE_DIR="$(awk '/package.*plugins/{print $NF}' <<< "$COMMAND_OUTPUT")"
+    CNI_PLUGINS_SOURCE_DIR="$(awk '/package.*plugins/{print $NF}' <<<"$COMMAND_OUTPUT")"
     [ -n "$CNI_PLUGINS_SOURCE_DIR" ] || {
         command-error "downloading containernetworking plugins failed"
     }
@@ -929,7 +938,7 @@ vm-install-glibc() { # script API
     local vm_glibc_dir="/opt/glibc/${glibc_ver}"
     if [ -n "$glibc_src" ] && [ -d "$glibc_src" ]; then
         vm-command "mkdir -p $vm_glibc_dir"
-        ( cd "$glibc_src" && tar cz . ) | vm-pipe-to-file "$vm_glibc_dir/glibc-$glibc_ver.tar.gz" ||
+        (cd "$glibc_src" && tar cz .) | vm-pipe-to-file "$vm_glibc_dir/glibc-$glibc_ver.tar.gz" ||
             error "failed to package glibc from '$glibc_src'"
         vm-command "cd $vm_glibc_dir && tar xf glibc-$glibc_ver.tar.gz && rm -f glibc-$glibc_ver.tar.gz" ||
             command-error "failed to extract glibc-$glibc_ver.tar.gz"
@@ -1028,7 +1037,7 @@ vm-create-singlenode-cluster() {
 
 vm-create-cluster() {
     vm-command "kubeadm init --pod-network-cidr=$CNI_SUBNET --cri-socket ${k8scri_sock}"
-    if ! grep -q "initialized successfully" <<< "$COMMAND_OUTPUT"; then
+    if ! grep -q "initialized successfully" <<<"$COMMAND_OUTPUT"; then
         command-error "kubeadm init failed"
     fi
 

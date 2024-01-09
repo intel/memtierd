@@ -1,5 +1,8 @@
+#!/bin/bash
+
 # Make sure the system has IDLEPAGE support enabled
 # Note: IDLEPAGE is enabled on ubuntu-22.04 by default
+# shellcheck disable=SC2154
 vm-command "[ -f /sys/kernel/mm/page_idle/bitmap ]" || {
     if [[ "$distro" != "debian-sid" && "$distro" != "ubuntu-22.04" ]]; then
         error "idlepage e2e test is implemented only for distro=debian-sid or distro=ubuntu-22.04"
@@ -21,8 +24,10 @@ zram-swap 2G
 
 # Test that 700M+ is swapped out from a process that has 1G of memory
 # reads actively 300M
-MEME_CGROUP=e2e-meme MEME_BS=1G MEME_BRC=1 MEME_BRS=300M memtierd-meme-start
+MEME_CGROUP=e2e-meme
+MEME_BS=1G MEME_BRC=1 MEME_BRS=300M memtierd-meme-start
 
+# shellcheck disable=SC2034
 MEMTIERD_YAML="
 policy:
   name: heat
@@ -32,7 +37,7 @@ policy:
       name: cgroups
       config: |
         cgroups:
-          - /sys/fs/cgroup/e2e-meme
+          - /sys/fs/cgroup/${MEME_CGROUP}
     heatnumas:
       0: [-1]
     heatmap:
@@ -51,60 +56,36 @@ policy:
         bitmapreadahead: 0
     mover:
       intervalms: 20
-      bandwidth: 1000
+      bandwidth: 100
 "
 memtierd-start
 
-next-round() {
-    local round_counter_var=$1
-    local round_counter_val=${!1}
-    local round_counter_max=$2
-    local round_delay=$3
-    if [[ "$round_counter_val" -ge "$round_counter_max" ]]; then
-        return 1
-    fi
-    eval "$round_counter_var=$(($round_counter_val + 1))"
-    sleep $round_delay
-    return 0
-}
-
-match-pageout() {
-    local pageout_regexp=$1
-    round_number=0
-    while ! ( memtierd-command "stats -t process_madvise -f csv | awk -F, \"{print \\\$6}\""; grep ${pageout_regexp} <<< $COMMAND_OUTPUT); do
-        echo "grep PAGEOUT value matching ${pageout_regexp} not found"
-        next-round round_number 5 1 || {
-            error "timeout: memtierd did not expected amount of memory"
-        }
-    done
-}
-
 sleep 4
-round_number=0
+
 echo "waiting 700M+ to be paged out..."
-match-pageout "0\.7[0-9][0-9]"
+memtierd-match-pageout "0\.7[0-9][0-9]" 5 6
 
 echo "check swap status: correct pages have been paged out."
 memtierd-command "swap -pid $MEME_PID -status"
-grep " 7[0-9][0-9] " <<< $COMMAND_OUTPUT || {
+grep " 7[0-9][0-9] " <<<"$COMMAND_OUTPUT" || {
     error "expected 7XX MB of swapped out"
 }
 
 echo "stop meme, expect all memory to be paged out"
 vm-command "kill -STOP ${MEME_PID}"
-match-pageout "1\.[0-2]"
+memtierd-match-pageout "1\.[0-2]" 5 6
 
 echo "continue meme, expect 300 MB to be swapped in by OS"
 vm-command "kill -CONT ${MEME_PID}"
 sleep 4
 memtierd-command "swap -pid $MEME_PID -status"
-grep " 7[0-9][0-9] " <<< $COMMAND_OUTPUT || {
+grep " 7[0-9][0-9] " <<<"$COMMAND_OUTPUT" || {
     error "expected 7XX MB of swapped out"
 }
 
 echo "stop meme again, verify that all memory gets paged out again"
 vm-command "kill -STOP ${MEME_PID}"
-match-pageout "1\.[2-5]"
+memtierd-match-pageout "1\.[2-5]" 6 6
 
 memtierd-stop
 memtierd-meme-stop

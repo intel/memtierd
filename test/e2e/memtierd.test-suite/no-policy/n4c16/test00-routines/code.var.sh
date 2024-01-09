@@ -1,3 +1,5 @@
+#!/bin/bash
+
 TMPDIR=/tmp/memtierd-e2e-$(basename "$TEST_DIR")
 TMPSHELL=$TMPDIR/shell.output.txt
 TMPMEMCMD=$TMPDIR/memtierd-command.output.txt
@@ -40,10 +42,11 @@ memtierd-start
 sleep 4
 memtierd-stop
 vm-command "grep RoutineStatActions.command.memtier $MEMTIERD_OUTPUT | tail -n 1"
-[[ $(awk '{print $1}' <<< "$COMMAND_OUTPUT") -gt 15 ]] || {
+[[ $(awk '{print $1}' <<<"$COMMAND_OUTPUT") -gt 15 ]] || {
     command-error "at least 15 memtier command executions expected"
 }
 
+# shellcheck disable=SC2034
 MEMTIERD_YAML="
 routines:
   - name: statactions

@@ -1,11 +1,14 @@
+#!/bin/bash
+
+# shellcheck disable=SC2154
 damon-idlepage-setup() {
     if [ "$distro" != "debian-sid" ]; then
         error "damon-idlepage-setup is implemented only for distro=debian-sid"
     fi
     # Clone Linux kernel and setup kernel development environment
     vm-command "[ -d linux ]" || vm-install-kernel-dev || {
-            error "failed to install kernel development environment"
-        }
+        error "failed to install kernel development environment"
+    }
 
     # Patch kernel configuration: enable DAMON and idle page tracking
     if ! vm-command "[ -f linux/.config.without-patches ]"; then
@@ -30,7 +33,7 @@ damon-idlepage-setup() {
  # end of Memory Management options
 
 EOF
-        vm-pipe-to-file "linux/config.enable-damon.patch"
+            vm-pipe-to-file "linux/config.enable-damon.patch"
 
         cat <<EOF |
 --- .config 2023-02-08 09:35:25.298783387 +0000
@@ -46,7 +49,7 @@ EOF
  CONFIG_ARCH_HAS_CURRENT_STACK_POINTER=y
  CONFIG_ARCH_HAS_PTE_DEVMAP=y
 EOF
-        vm-pipe-to-file "linux/config.enable-idlepage.patch"
+            vm-pipe-to-file "linux/config.enable-idlepage.patch"
 
         vm-command "cd linux; patch < config.enable-damon.patch; patch < config.enable-idlepage.patch" || {
             command-error "patching kernel configuration failed"
@@ -60,8 +63,9 @@ EOF
         vm-command "cd linux; make -C tools/perf" || {
             error "building perf failed"
         }
-        vm-command 'cd linux; linuxver=$(git describe | sed -e "s/v\([0-9]\).\([0-9]*\)-.*/\1.\2/g"); ln -sv $(pwd)/tools/perf /usr/local/bin/perf_$linuxver'
-        vm-command 'dpkg -i $(ls linux-image-*.deb | grep -v dbg)'
+        vm-command "cd linux; linuxver=$(git describe | sed -e "s/v\([0-9]\).\([0-9]*\)-.*/\1.\2/g"); ln -sv $(pwd)/tools/perf /usr/local/bin/perf_$linuxver"
+        # shellcheck disable=SC2010
+        vm-command "dpkg -i $(ls linux-image-*.deb | grep -v dbg)"
         vm-reboot
     fi
 }

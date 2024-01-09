@@ -81,20 +81,20 @@ distro-resolve-fn() {
     local apifn="$1" candidates fn
 
     case $apifn in
-        distro-*) apifn="${apifn#distro-}";;
-        *) error "internal error: can't resolve non-API function $apifn";;
+    distro-*) apifn="${apifn#distro-}" ;;
+    *) error "internal error: can't resolve non-API function $apifn" ;;
     esac
     candidates="${VM_DISTRO/./_}-$apifn ${VM_DISTRO%%-*}-$apifn"
     case $VM_DISTRO in
-        ubuntu*) candidates="$candidates debian-$apifn";;
-        centos*) candidates="$candidates fedora-$apifn rpm-$apifn";;
-        fedora*) candidates="$candidates rpm-$apifn";;
-        *suse*)  candidates="$candidates rpm-$apifn";;
-        sles*)   candidates="$candidates opensuse-$apifn rpm-$apifn";;
+    ubuntu*) candidates="$candidates debian-$apifn" ;;
+    centos*) candidates="$candidates fedora-$apifn rpm-$apifn" ;;
+    fedora*) candidates="$candidates rpm-$apifn" ;;
+    *suse*) candidates="$candidates rpm-$apifn" ;;
+    sles*) candidates="$candidates opensuse-$apifn rpm-$apifn" ;;
     esac
     case $apifn in
-        *-pre|*-post) ;;
-        *) candidates="$candidates default-$apifn distro-unresolved";;
+    *-pre | *-post) ;;
+    *) candidates="$candidates default-$apifn distro-unresolved" ;;
     esac
     for fn in $candidates; do
         if [ "$(type -t -- "$fn")" = "function" ]; then
@@ -158,7 +158,7 @@ ubuntu-download-kernel() {
     [ -n "$version" ] ||
         error "missing kernel version to install"
     if [ "$version" == "list" ]; then
-        wget -q -O- https://kernel.ubuntu.com/~kernel-ppa/mainline/  | grep -E '^<tr>.*href="v[5-9]' | sed 's|^.*href="v\([0-9][^"]*\)/".*$|\1|g'
+        wget -q -O- https://kernel.ubuntu.com/~kernel-ppa/mainline/ | grep -E '^<tr>.*href="v[5-9]' | sed 's|^.*href="v\([0-9][^"]*\)/".*$|\1|g'
         return 0
     fi
     vm-command "mkdir -p kernels; rm -f kernels/linux*$version*deb; for deb in \$(wget -q -O- https://kernel.ubuntu.com/~kernel-ppa/mainline/v$version/ | awk -F'\"' '/amd64.*deb/{print \$2}' | grep -v -E 'headers|lowlatency'); do ( cd kernels; wget -q https://kernel.ubuntu.com/~kernel-ppa/mainline/v$version/\$deb ); done; echo; echo 'Downloaded kernel packages:'; du -h kernels/*.deb" ||
@@ -354,9 +354,9 @@ centos-7-install-containerd-pre() {
 
 centos-8-install-pkg-pre() {
     vm-command "[ -f /etc/yum.repos.d/.fixup ]" && return 0
-    vm-command 'sed -i "s/mirrorlist/#mirrorlist/g" /etc/yum.repos.d/CentOS-*' && \
-    vm-command 'sed -i "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-*' && \
-    vm-command 'touch /etc/yum.repos.d/.fixup'
+    vm-command 'sed -i "s/mirrorlist/#mirrorlist/g" /etc/yum.repos.d/CentOS-*' &&
+        vm-command 'sed -i "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-*' &&
+        vm-command 'touch /etc/yum.repos.d/.fixup'
 }
 
 centos-8-install-crio-pre() {
@@ -370,10 +370,10 @@ centos-8-install-crio-pre() {
 
 centos-8-install-crio() {
     if [ -n "$crio_src" ]; then
-	default-install-crio
+        default-install-crio
     else
-	distro-install-pkg cri-o
-	vm-command "systemctl enable crio"
+        distro-install-pkg cri-o
+        vm-command "systemctl enable crio"
     fi
 }
 
@@ -441,7 +441,7 @@ fedora-install-pkg() {
     # existing and installing new packages on the same run.)
     if [ "$do_reinstall" == "1" ]; then
         local reinstall_pkgs
-        reinstall_pkgs=$(awk -F '[ -]' -v ORS=" " '/Package .* already installed/{print $2}' <<< "$COMMAND_OUTPUT")
+        reinstall_pkgs=$(awk -F '[ -]' -v ORS=" " '/Package .* already installed/{print $2}' <<<"$COMMAND_OUTPUT")
         if [ -n "$reinstall_pkgs" ]; then
             vm-command "dnf reinstall -y $reinstall_pkgs"
         fi
@@ -548,7 +548,7 @@ gpgcheck=1
 repo_gpgcheck=1
 gpgkey=$yumkey $rpmkey
 EOF
-      vm-pipe-to-file $repo
+        vm-pipe-to-file $repo
 
     if [ -n "$k8s" ]; then
         k8sverparam="-${k8s}-0"
@@ -556,7 +556,7 @@ EOF
         k8sverparam=""
     fi
 
-    vm-command 'grep -iq centos-[78] /etc/os-release' && \
+    vm-command 'grep -iq centos-[78] /etc/os-release' &&
         vm-command "sed -i 's/gpgcheck=1/gpgcheck=0/g' $repo"
 
     distro-install-pkg iproute-tc kubelet$k8sverparam kubeadm$k8sverparam kubectl$k8sverparam
@@ -643,24 +643,24 @@ sles-install-utils() {
         command-error "cannot run SUSEConnect"
     }
     # Parse registration status and SLES version.
-    if [ "$(jq '.[] | select(.identifier == "SLES") | .status' <<< $COMMAND_OUTPUT)" == '"Registered"' ]; then
+    if [ "$(jq '.[] | select(.identifier == "SLES") | .status' <<<$COMMAND_OUTPUT)" == '"Registered"' ]; then
         sles_registered=1
     fi
-    sles_version="$(jq -r '.[] | select(.identifier == "SLES") | .version' <<< $COMMAND_OUTPUT)"
+    sles_version="$(jq -r '.[] | select(.identifier == "SLES") | .version' <<<$COMMAND_OUTPUT)"
     if [ -z "$sles_version" ]; then
         command-error "cannot read SLES version information from SUSEConnect -s output"
     fi
     # Try automatic registration if registration code is provided.
     if [ "$sles_registered" == 0 ] && [ -n "$VM_SLES_REGCODE" ]; then
-            vm-command "SUSEConnect -r $VM_SLES_REGCODE" || {
-                echo "ERROR:"
-                echo "ERROR: Registering to SUSE Customer Center failed."
-                echo "ERROR: - Verify VM_SLES_REGCODE and try again."
-                echo "ERROR: - Unset VM_SLES_REGCODE to skip registration (use unsupported repos)."
-                echo "ERROR:"
-                exit 1
-            }
-            sles_registered=1
+        vm-command "SUSEConnect -r $VM_SLES_REGCODE" || {
+            echo "ERROR:"
+            echo "ERROR: Registering to SUSE Customer Center failed."
+            echo "ERROR: - Verify VM_SLES_REGCODE and try again."
+            echo "ERROR: - Unset VM_SLES_REGCODE to skip registration (use unsupported repos)."
+            echo "ERROR:"
+            exit 1
+        }
+        sles_registered=1
     fi
     # Add correct repo, depending on registration status.
     if [ "$sles_registered" == 0 ]; then
@@ -780,7 +780,7 @@ opensuse-wait-for-zypper() {
 
 opensuse-require-repo-virtualization-containers() {
     vm-command "zypper ls"
-    if ! grep -q Virtualization_containers <<< "$COMMAND_OUTPUT"; then
+    if ! grep -q Virtualization_containers <<<"$COMMAND_OUTPUT"; then
         opensuse-install-repo https://download.opensuse.org/repositories/Virtualization:containers/15.4/Virtualization:containers.repo
         opensuse-refresh-pkg-db
     fi
@@ -802,7 +802,7 @@ opensuse-install-containerd() {
     distro-install-pkg --from Virtualization_containers containerd containerd-ctr
     vm-command "ln -sf /usr/sbin/containerd-ctr /usr/sbin/ctr"
 
-cat <<EOF |
+    cat <<EOF |
 [Unit]
 Description=containerd container runtime
 Documentation=https://containerd.io
@@ -823,12 +823,12 @@ TasksMax=infinity
 [Install]
 WantedBy=multi-user.target
 EOF
-    vm-pipe-to-file /etc/systemd/system/containerd.service
+        vm-pipe-to-file /etc/systemd/system/containerd.service
 
     cat <<EOF |
 disabled_plugins = []
 EOF
-    vm-pipe-to-file /etc/containerd/config.toml
+        vm-pipe-to-file /etc/containerd/config.toml
     vm-command "systemctl daemon-reload" ||
         command-error "failed to reload systemd daemon"
 }
@@ -837,7 +837,7 @@ opensuse-install-k8s() {
     vm-command "( lsmod | grep -q br_netfilter ) || { echo br_netfilter > /etc/modules-load.d/50-br_netfilter.conf; modprobe br_netfilter; }"
     vm-command "echo 1 > /proc/sys/net/ipv4/ip_forward"
     vm-command "zypper ls"
-    if ! grep -q snappy <<< "$COMMAND_OUTPUT"; then
+    if ! grep -q snappy <<<"$COMMAND_OUTPUT"; then
         distro-install-repo "http://download.opensuse.org/repositories/system:/snappy/openSUSE_Leap_15.4 snappy"
         distro-refresh-pkg-db
     fi
@@ -883,7 +883,7 @@ opensuse-install-k8s() {
     done
     # Manage kubelet with systemd rather than snap
     vm-command "snap stop kubelet"
-cat <<EOF |
+    cat <<EOF |
 [Unit]
 Description=kubelet: The Kubernetes Node Agent
 Documentation=https://kubernetes.io/docs/
@@ -899,7 +899,7 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-    vm-pipe-to-file /etc/systemd/system/kubelet.service
+        vm-pipe-to-file /etc/systemd/system/kubelet.service
     vm-command "systemctl enable --now kubelet" ||
         command-error "failed to enable kubelet"
 }
@@ -994,7 +994,7 @@ default-setup-proxies() {
     if [ -n "$k8smaster" ]; then
         local master_user_ip
         master_user_ip="$(vm-ssh-user-ip $k8smaster)"
-        master_node_ip_comma=${master_user_ip/*@},
+        master_node_ip_comma=${master_user_ip/*@/},
     fi
 
     ext_no_proxy="$master_node_ip_comma$VM_IP,10.0.0.0/8,$CNI_SUBNET,$hn,.svc,.internal,192.168.0.0/16"
@@ -1010,9 +1010,9 @@ ${scope}HTTPS_PROXY=$https_proxy
 ${scope}FTP_PROXY=$ftp_proxy
 ${scope}NO_PROXY=$no_proxy,$ext_no_proxy
 EOF
-      vm-pipe-to-file $append $file
-      scope="export "
-      append=""
+            vm-pipe-to-file $append $file
+        scope="export "
+        append=""
     done
     # Setup proxies for systemd services that might be installed later
     for file in /etc/systemd/system/{containerd,docker,crio}.service.d/proxy.conf; do
@@ -1022,7 +1022,7 @@ Environment=HTTP_PROXY=$http_proxy
 Environment=HTTPS_PROXY=$https_proxy
 Environment=NO_PROXY=$no_proxy,$ext_no_proxy
 EOF
-        vm-pipe-to-file $file
+            vm-pipe-to-file $file
     done
     # Setup proxies inside docker containers
     for file in /{root,home/$VM_SSH_USER}/.docker/config.json; do
@@ -1037,7 +1037,7 @@ EOF
     }
 }
 EOF
-        vm-pipe-to-file $file
+            vm-pipe-to-file $file
     done
 }
 
@@ -1119,7 +1119,7 @@ TasksMax=infinity
 [Install]
 WantedBy=multi-user.target
 EOF
-    vm-pipe-to-file /etc/systemd/system/crio.service
+        vm-pipe-to-file /etc/systemd/system/crio.service
     vm-command "mkdir -p /etc/systemd/system/crio.service.d"
     vm-command "(echo \"[Service]\"; echo \"Environment=PATH=/sbin:/usr/sbin:$PATH:/usr/libexec/podman\") > /etc/systemd/system/crio.service.d/path.conf; systemctl daemon-reload"
 }
@@ -1131,7 +1131,7 @@ default-config-crio() {
 [registries.search]
 registries = ['docker.io']
 EOF
-    vm-pipe-to-file /etc/containers/registries.conf
+        vm-pipe-to-file /etc/containers/registries.conf
 }
 
 default-restart-crio() {
@@ -1184,9 +1184,9 @@ default-env-file-dir() {
 
 from-tarball-install-golang() {
     vm-command-q "go version | grep -q go$GOLANG_VERSION" || {
-        vm-command "wget --progress=dot:giga $GOLANG_URL -O go.tgz" && \
-            vm-command "tar -C /usr/local -xvzf go.tgz >/dev/null && rm go.tgz" && \
-            vm-command "echo 'PATH=/usr/local/go/bin:\$PATH' > /etc/profile.d/go.sh" && \
+        vm-command "wget --progress=dot:giga $GOLANG_URL -O go.tgz" &&
+            vm-command "tar -C /usr/local -xvzf go.tgz >/dev/null && rm go.tgz" &&
+            vm-command "echo 'PATH=/usr/local/go/bin:\$PATH' > /etc/profile.d/go.sh" &&
             vm-command "echo \* installed \$(go version)"
     }
 }
@@ -1199,7 +1199,7 @@ create-ext4-var-lib-containerd() {
     if ! dev="$(vm-command-q "losetup -f")" || [ -z "$dev" ]; then
         command-error "failed to find unused loopback device"
     fi
-    vm-command "dd if=/dev/zero of=$file bs=$((1024*1000)) count=$((1000*5))" ||
+    vm-command "dd if=/dev/zero of=$file bs=$((1024 * 1000)) count=$((1000 * 5))" ||
         command-error "failed to create file for ext4 loopback mount"
     vm-command "losetup $dev $file" ||
         command-error "failed to attach $file to $dev"
@@ -1226,13 +1226,13 @@ Type=oneshot
 [Install]
 WantedBy=local-fs.target
 EOF
-    vm-pipe-to-file /etc/systemd/system/attach-loop-devices.service
+        vm-pipe-to-file /etc/systemd/system/attach-loop-devices.service
     vm-command "systemctl enable attach-loop-devices.service"
 
     cat <<EOF |
 $dev    $dir    ext4    defaults    1 2
 EOF
-    vm-pipe-to-file --append /etc/fstab
+        vm-pipe-to-file --append /etc/fstab
 
     vm-command "mount $dir" ||
         command-error "failed to mount new ext4 $dir"

@@ -14,7 +14,10 @@ usage() {
 }
 
 error() {
-    (echo ""; echo "error: $1" ) >&2
+    (
+        echo ""
+        echo "error: $1"
+    ) >&2
     exit 1
 }
 
@@ -38,7 +41,7 @@ export-var-files() {
             # append values in code variables
             echo "exporting $var_name - appending from $var_filepath"
             export "$var_name"="${!var_name}""
-$(< "$var_filepath")"
+$(<"$var_filepath")"
         else
             # creating / replace other variables
             if [ -z "${!var_name}" ]; then
@@ -49,7 +52,7 @@ $(< "$var_filepath")"
             if [[ "$var_file_name" == *.var.in.* ]]; then
                 export "$var_name"="$(eval "echo -e \"$(<"${var_filepath}")\"")"
             else
-                export "$var_name"="$(< "$var_filepath")"
+                export "$var_name"="$(<"$var_filepath")"
             fi
         fi
     done
@@ -61,7 +64,7 @@ export-vm-files() {
     if [ ! -d "$vm_files_dir" ]; then
         return
     fi
-    if [[ "$vm_files" == *"="* ]] ; then
+    if [[ "$vm_files" == *"="* ]]; then
         eval "declare -A vm_files_aa=${vm_files#*=}"
     else
         declare -A vm_files_aa
@@ -154,7 +157,7 @@ summary_dir=$(mktemp -d)
 trap cleanup TERM EXIT QUIT
 
 summary_file="$summary_dir/summary.txt"
-echo -n "" > "$summary_file"
+echo -n "" >"$summary_file"
 
 export-and-source-dir "$TESTS_ROOT_DIR"
 
@@ -192,27 +195,27 @@ for POLICY_DIR in "$TESTS_ROOT_DIR"/*; do
                 # Needs topology, distro and container runtime stack.
                 k8scri=${k8scri:-"containerd"}
                 case "${k8scri}" in
-                    "cri-resmgr|containerd")
-                        criname=crirm-containerd
-                        ;;
-                    "cri-resmgr|crio")
-                        criname=crirm-crio
-                        ;;
-                    "containerd")
-                        criname=containerd
-                        ;;
-                    "containerd&cri-resmgr")
-                        criname=nrirm-containerd
-                        ;;
-                    "crio")
-                        criname=crio
-                        ;;
-                    "crio&cri-resmgr")
-                        criname=nrirm-crio
-                        ;;
-                    *)
-                        error "unsupported k8scri: \"${k8scri}\""
-                        ;;
+                "cri-resmgr|containerd")
+                    criname=crirm-containerd
+                    ;;
+                "cri-resmgr|crio")
+                    criname=crirm-crio
+                    ;;
+                "containerd")
+                    criname=containerd
+                    ;;
+                "containerd&cri-resmgr")
+                    criname=nrirm-containerd
+                    ;;
+                "crio")
+                    criname=crio
+                    ;;
+                "crio&cri-resmgr")
+                    criname=nrirm-crio
+                    ;;
+                *)
+                    error "unsupported k8scri: \"${k8scri}\""
+                    ;;
                 esac
                 vm="$(basename "$TOPOLOGY_DIR")-${distro}-${criname}"
                 export vm
@@ -238,11 +241,11 @@ ${code}"
                             "$RUN_SH" test 2>&1 | tee "$outdir/run.sh.output"
                         test_name="$(basename "$POLICY_DIR")/$(basename "$TOPOLOGY_DIR")/$(basename "$TEST_DIR")"
                         if grep -q "Test verdict: PASS" "$outdir/run.sh.output"; then
-                            echo "PASS $test_name" >> "$summary_file"
+                            echo "PASS $test_name" >>"$summary_file"
                         elif grep -q "Test verdict: FAIL" "$outdir/run.sh.output"; then
-                            echo "FAIL $test_name" >> "$summary_file"
+                            echo "FAIL $test_name" >>"$summary_file"
                         else
-                            echo "ERROR $test_name" >> "$summary_file"
+                            echo "ERROR $test_name" >>"$summary_file"
                         fi
                     )
                 done

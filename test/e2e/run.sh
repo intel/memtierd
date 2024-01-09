@@ -22,7 +22,7 @@ source "$E2E_LIB_DIR"/host.bash
 # shellcheck source=lib/vm.bash
 source "$E2E_LIB_DIR"/vm.bash
 
-script_source="$(< "$0") $(< "$E2E_LIB_DIR/host.bash") $(< "$E2E_LIB_DIR/command.bash") $(< "$E2E_LIB_DIR/vm.bash")"
+script_source="$(<"$0") $(<"$E2E_LIB_DIR/host.bash") $(<"$E2E_LIB_DIR/command.bash") $(<"$E2E_LIB_DIR/vm.bash")"
 
 usage() {
     echo "$DEMO_TITLE"
@@ -157,7 +157,10 @@ usage() {
 }
 
 error() {
-    (echo ""; echo "error: $1" ) >&2
+    (
+        echo ""
+        echo "error: $1"
+    ) >&2
     command-exit-if-not-interactive
 }
 
@@ -219,13 +222,13 @@ get-py-allowed() {
         vm-command "$("$E2E_LIB_DIR/topology.py" bash_topology_dump)" >/dev/null || {
             command-error "error fetching topology_dump from $VM_NAME"
         }
-        echo -e "$COMMAND_OUTPUT" > "$topology_dump_file"
+        echo -e "$COMMAND_OUTPUT" >"$topology_dump_file"
     fi
     # Fetch data and update allowed* variables from the virtual machine
     vm-command "$("$E2E_LIB_DIR/topology.py" bash_res_allowed 'pod[0-9]*c[0-9]*')" >/dev/null || {
         command-error "error fetching res_allowed from $VM_NAME"
     }
-    echo -e "$COMMAND_OUTPUT" > "$res_allowed_file"
+    echo -e "$COMMAND_OUTPUT" >"$res_allowed_file"
     # Validate res_allowed_file. Error out if there is same container
     # name with two different sets of allowed CPUs or memories.
     awk -F "[ /]" '{if (pod[$1]!=0 && pod[$1]!=""$3""$4){print "error: ambiguous allowed resources for name "$1; exit(1)};pod[$1]=""$3""$4}' "$res_allowed_file" || {
@@ -301,7 +304,7 @@ get-py-cache() {
     speed=1000 vm-command "cat \"/var/lib/cri-resmgr/cache\"" >/dev/null 2>&1 || {
         command-error "fetching cache file failed"
     }
-    cat > "${OUTPUT_DIR}/cache" <<<"$COMMAND_OUTPUT"
+    cat >"${OUTPUT_DIR}/cache" <<<"$COMMAND_OUTPUT"
     py_cache="
 import json
 cache=json.load(open(\"${OUTPUT_DIR}/cache\"))
@@ -391,26 +394,26 @@ install-files() {
     for tgt in "${!files[@]}"; do
         src="${files[$tgt]}"
         case $src in
-            "data:,"*)
-                data=${src#data:,}
-                ;;
-            "data:;base64,"*)
-                data=$(base64 -d <<< "${src#data:;base64,}")
-                ;;
-            "file:"*)
-                data=$(< "${src#file:}")
-                ;;
-            "dir:")
-                echo -n "Creating on vm: $tgt/... "
-                vm-command-q "mkdir -p \"$tgt\"" || {
-                    error "failed to make directory to vm \"$tgt\""
-                }
-                echo "ok."
-                continue
-                ;;
-            *)
-                error "invalid source scheme \"${src}\", expected \"data:,\" \"data:;base64,\", \"file:\" or \"dir:\""
-                ;;
+        "data:,"*)
+            data=${src#data:,}
+            ;;
+        "data:;base64,"*)
+            data=$(base64 -d <<<"${src#data:;base64,}")
+            ;;
+        "file:"*)
+            data=$(<"${src#file:}")
+            ;;
+        "dir:")
+            echo -n "Creating on vm: $tgt/... "
+            vm-command-q "mkdir -p \"$tgt\"" || {
+                error "failed to make directory to vm \"$tgt\""
+            }
+            echo "ok."
+            continue
+            ;;
+        *)
+            error "invalid source scheme \"${src}\", expected \"data:,\" \"data:;base64,\", \"file:\" or \"dir:\""
+            ;;
         esac
         echo -n "Writing on vm: $tgt... "
         vm-write-file "$tgt" "$data" || {
@@ -440,18 +443,18 @@ install() { # script API
     #   launch cri-resmgr
     local target="$1"
     case "$target" in
-        "cri-resmgr")
-            vm-install-cri-resmgr
-            ;;
-        "cri-resmgr-agent")
-            vm-install-cri-resmgr-agent
-            ;;
-        "cri-resmgr-webhook")
-            vm-install-cri-resmgr-webhook
-            ;;
-        *)
-            error "unknown target to install \"$1\""
-            ;;
+    "cri-resmgr")
+        vm-install-cri-resmgr
+        ;;
+    "cri-resmgr-agent")
+        vm-install-cri-resmgr-agent
+        ;;
+    "cri-resmgr-webhook")
+        vm-install-cri-resmgr-webhook
+        ;;
+    *)
+        error "unknown target to install \"$1\""
+        ;;
     esac
 }
 
@@ -463,23 +466,23 @@ uninstall() { # script API
     #   cri-resmgr-webhook: stop cri-resmgr-webhook and delete webhook files from VM.
     local target="$1"
     case $target in
-        "cri-resmgr")
-            terminate cri-resmgr
-            terminate cri-resmgr-agent
-            distro-remove-pkg cri-resource-manager
-            vm-command "rm -rf /usr/local/bin/cri-resmgr /usr/bin/cri-resmgr /usr/local/bin/cri-resmgr-agent /usr/bin/cri-resmgr-agent /var/lib/cri-resmgr /etc/cri-resmgr"
-            ;;
-        "cri-resmgr-agent")
-            terminate cri-resmgr-agent
-            vm-command "rm -rf /usr/local/bin/cri-resmgr /usr/bin/cri-resmgr /usr/local/bin/cri-resmgr-agent /usr/bin/cri-resmgr-agent /var/lib/cri-resmgr /etc/cri-resmgr"
-            ;;
-        "cri-resmgr-webhook")
-            terminate cri-resmgr-webhook
-            vm-command "rm -rf webhook"
-            ;;
-        *)
-            error "uninstall: invalid target \"$target\""
-            ;;
+    "cri-resmgr")
+        terminate cri-resmgr
+        terminate cri-resmgr-agent
+        distro-remove-pkg cri-resource-manager
+        vm-command "rm -rf /usr/local/bin/cri-resmgr /usr/bin/cri-resmgr /usr/local/bin/cri-resmgr-agent /usr/bin/cri-resmgr-agent /var/lib/cri-resmgr /etc/cri-resmgr"
+        ;;
+    "cri-resmgr-agent")
+        terminate cri-resmgr-agent
+        vm-command "rm -rf /usr/local/bin/cri-resmgr /usr/bin/cri-resmgr /usr/local/bin/cri-resmgr-agent /usr/bin/cri-resmgr-agent /var/lib/cri-resmgr /etc/cri-resmgr"
+        ;;
+    "cri-resmgr-webhook")
+        terminate cri-resmgr-webhook
+        vm-command "rm -rf webhook"
+        ;;
+    *)
+        error "uninstall: invalid target \"$target\""
+        ;;
     esac
 }
 
@@ -516,70 +519,70 @@ launch() { # script API
     local cri_resmgr_config_option="-${cri_resmgr_config:-force}-config"
     local cri_resmgr_mode=""
     case $target in
-        "cri-resmgr")
-            host-command "$SCP \"$cri_resmgr_cfg\" $VM_SSH_USER@$VM_IP:" || {
-                command-error "copying \"$cri_resmgr_cfg\" to VM failed"
-            }
-            vm-command "cat $(basename "$cri_resmgr_cfg")"
-            if [[ "$k8scri" == cri-resmgr* ]]; then
-                # launch cri-resmgr as the top element in the k8s container runtime stack
-                cri_resmgr_mode="-relay-socket ${cri_resmgr_sock} -runtime-socket $cri_sock -image-socket $cri_sock"
-            else
-                # launch cri-resmgr as an NRI plugin to running container runtime
-                cri_resmgr_mode="-use-nri-plugin"
-            fi
-            launch_cmd="cri-resmgr $cri_resmgr_mode $cri_resmgr_config_option $(basename "$cri_resmgr_cfg") $cri_resmgr_extra_args"
-            vm-command-q "rm -f $cri_resmgr_pidfile"
-            vm-command-q "echo '$launch_cmd' > cri-resmgr.launch.sh ; rm -f cri-resmgr.output.txt"
-            vm-command "$launch_cmd  >cri-resmgr.output.txt 2>&1 &"
-            vm-wait-process --timeout 30 --pidfile "$cri_resmgr_pidfile" cri-resmgr
-            vm-command "grep 'FATAL ERROR' cri-resmgr.output.txt" >/dev/null 2>&1 && {
-                command-error "launching cri-resmgr failed with FATAL ERROR"
-            }
-            vm-command "fuser ${cri_resmgr_pidfile}" >/dev/null 2>&1 || {
-                echo "cri-resmgr last output line:"
-                vm-command-q "tail -n 1 cri-resmgr.output.txt"
-                command-error "launching cri-resmgr failed, cannot find cri-resmgr PID"
-            }
-            ;;
+    "cri-resmgr")
+        host-command "$SCP \"$cri_resmgr_cfg\" $VM_SSH_USER@$VM_IP:" || {
+            command-error "copying \"$cri_resmgr_cfg\" to VM failed"
+        }
+        vm-command "cat $(basename "$cri_resmgr_cfg")"
+        if [[ "$k8scri" == cri-resmgr* ]]; then
+            # launch cri-resmgr as the top element in the k8s container runtime stack
+            cri_resmgr_mode="-relay-socket ${cri_resmgr_sock} -runtime-socket $cri_sock -image-socket $cri_sock"
+        else
+            # launch cri-resmgr as an NRI plugin to running container runtime
+            cri_resmgr_mode="-use-nri-plugin"
+        fi
+        launch_cmd="cri-resmgr $cri_resmgr_mode $cri_resmgr_config_option $(basename "$cri_resmgr_cfg") $cri_resmgr_extra_args"
+        vm-command-q "rm -f $cri_resmgr_pidfile"
+        vm-command-q "echo '$launch_cmd' > cri-resmgr.launch.sh ; rm -f cri-resmgr.output.txt"
+        vm-command "$launch_cmd  >cri-resmgr.output.txt 2>&1 &"
+        vm-wait-process --timeout 30 --pidfile "$cri_resmgr_pidfile" cri-resmgr
+        vm-command "grep 'FATAL ERROR' cri-resmgr.output.txt" >/dev/null 2>&1 && {
+            command-error "launching cri-resmgr failed with FATAL ERROR"
+        }
+        vm-command "fuser ${cri_resmgr_pidfile}" >/dev/null 2>&1 || {
+            echo "cri-resmgr last output line:"
+            vm-command-q "tail -n 1 cri-resmgr.output.txt"
+            command-error "launching cri-resmgr failed, cannot find cri-resmgr PID"
+        }
+        ;;
 
-        "cri-resmgr-agent")
-            host-command "$SCP \"$adjustment_schema\" $VM_SSH_USER@$VM_IP:" ||
-                command-error "copying \"$adjustment_schema\" to VM failed"
-            vm-command "kubectl delete -f $(basename "$adjustment_schema"); kubectl create -f $(basename "$adjustment_schema")"
-            launch_cmd="NODE_NAME=\$(hostname) cri-resmgr-agent -kubeconfig /root/.kube/config $cri_resmgr_agent_extra_args"
-            vm-command-q "echo '$launch_cmd' >cri-resmgr-agent.launch.sh; rm -f cri-resmgr-agent.output.txt"
-            vm-command "$launch_cmd >cri-resmgr-agent.output.txt 2>&1 &"
-            vm-wait-process --timeout 30 cri-resmgr-agent
-            vm-command "grep 'FATAL ERROR' cri-resmgr-agent.output.txt" >/dev/null 2>&1 &&
-                command-error "launching cri-resmgr-agent failed with FATAL ERROR"
-            vm-command "fuser ${cri_resmgr_agent_sock}" >/dev/null 2>&1 ||
-                command-error "launching cri-resmgr-agent failed, cannot find cri-resmgr-agent PID"
-            ;;
+    "cri-resmgr-agent")
+        host-command "$SCP \"$adjustment_schema\" $VM_SSH_USER@$VM_IP:" ||
+            command-error "copying \"$adjustment_schema\" to VM failed"
+        vm-command "kubectl delete -f $(basename "$adjustment_schema"); kubectl create -f $(basename "$adjustment_schema")"
+        launch_cmd="NODE_NAME=\$(hostname) cri-resmgr-agent -kubeconfig /root/.kube/config $cri_resmgr_agent_extra_args"
+        vm-command-q "echo '$launch_cmd' >cri-resmgr-agent.launch.sh; rm -f cri-resmgr-agent.output.txt"
+        vm-command "$launch_cmd >cri-resmgr-agent.output.txt 2>&1 &"
+        vm-wait-process --timeout 30 cri-resmgr-agent
+        vm-command "grep 'FATAL ERROR' cri-resmgr-agent.output.txt" >/dev/null 2>&1 &&
+            command-error "launching cri-resmgr-agent failed with FATAL ERROR"
+        vm-command "fuser ${cri_resmgr_agent_sock}" >/dev/null 2>&1 ||
+            command-error "launching cri-resmgr-agent failed, cannot find cri-resmgr-agent PID"
+        ;;
 
-        "cri-resmgr-systemd")
-            host-command "$SCP \"$cri_resmgr_cfg\" $VM_SSH_USER@$VM_IP:" ||
-                command-error "copying \"$cri_resmgr_cfg\" to VM failed"
-            vm-command "cp \"$(basename "$cri_resmgr_cfg")\" /etc/cri-resmgr/fallback.cfg"
-            vm-command "systemctl daemon-reload ; systemctl start cri-resource-manager" ||
-                command-error "systemd failed to start cri-resource-manager"
-            vm-wait-process --timeout 30 cri-resmgr
-            vm-command "systemctl is-active cri-resource-manager" || {
-                vm-command "systemctl status cri-resource-manager"
-                command-error "cri-resource-manager did not become active after systemctl start"
-            }
-            ;;
+    "cri-resmgr-systemd")
+        host-command "$SCP \"$cri_resmgr_cfg\" $VM_SSH_USER@$VM_IP:" ||
+            command-error "copying \"$cri_resmgr_cfg\" to VM failed"
+        vm-command "cp \"$(basename "$cri_resmgr_cfg")\" /etc/cri-resmgr/fallback.cfg"
+        vm-command "systemctl daemon-reload ; systemctl start cri-resource-manager" ||
+            command-error "systemd failed to start cri-resource-manager"
+        vm-wait-process --timeout 30 cri-resmgr
+        vm-command "systemctl is-active cri-resource-manager" || {
+            vm-command "systemctl status cri-resource-manager"
+            command-error "cri-resource-manager did not become active after systemctl start"
+        }
+        ;;
 
-        "cri-resmgr-webhook")
-            kubectl apply -f webhook/webhook-deployment.yaml
-            kubectl wait --for=condition=Available -n cri-resmgr deployments/cri-resmgr-webhook ||
-                error "cri-resmgr-webhook deployment did not become Available"
-            kubectl apply -f webhook/mutating-webhook-config.yaml
-            ;;
+    "cri-resmgr-webhook")
+        kubectl apply -f webhook/webhook-deployment.yaml
+        kubectl wait --for=condition=Available -n cri-resmgr deployments/cri-resmgr-webhook ||
+            error "cri-resmgr-webhook deployment did not become Available"
+        kubectl apply -f webhook/mutating-webhook-config.yaml
+        ;;
 
-        *)
-            error "launch: invalid target \"$1\""
-            ;;
+    *)
+        error "launch: invalid target \"$1\""
+        ;;
     esac
     is-hooked on_launch && run-hook on_launch
     return 0
@@ -594,18 +597,18 @@ terminate() { # script API
     #   cri-resmgr-webhook: delete cri-resmgr-webhook from k8s.
     local target="$1"
     case $target in
-        "cri-resmgr")
-            vm-command "fuser --kill ${cri_resmgr_pidfile} 2>/dev/null"
-            ;;
-        "cri-resmgr-agent")
-            vm-command "fuser --kill ${cri_resmgr_agent_sock} 2>/dev/null"
-            ;;
-        "cri-resmgr-webhook")
-            vm-command "kubectl delete -f webhook/mutating-webhook-config.yaml; kubectl delete -f webhook/webhook-deployment.yaml"
-            ;;
-        *)
-            error "terminate: invalid target \"$target\""
-            ;;
+    "cri-resmgr")
+        vm-command "fuser --kill ${cri_resmgr_pidfile} 2>/dev/null"
+        ;;
+    "cri-resmgr-agent")
+        vm-command "fuser --kill ${cri_resmgr_agent_sock} 2>/dev/null"
+        ;;
+    "cri-resmgr-webhook")
+        vm-command "kubectl delete -f webhook/mutating-webhook-config.yaml; kubectl delete -f webhook/webhook-deployment.yaml"
+        ;;
+    *)
+        error "terminate: invalid target \"$target\""
+        ;;
     esac
 }
 
@@ -633,20 +636,20 @@ extended-resources() { # script API
     # make sure kubectl proxy is running
     vm-command-q "ss -ltn | grep -q 127.0.0.1:8001 || { kubectl proxy &>/dev/null </dev/null & sleep 2 ; }"
     case $action in
-        add)
-            if [ -z "$value" ]; then
-                error "extended-resource: missing value to add to resource $resource"
-                return 1
-            fi
-            vm-command "curl --header 'Content-Type: application/json-patch+json' --request PATCH --data '[{\"op\": \"add\", \"path\": \"/status/capacity/$resource_escaped\", \"value\": \"$value\"}]' http://localhost:8001/api/v1/nodes/\$(hostname)/status"
-            ;;
-        remove)
-            vm-command "curl --header 'Content-Type: application/json-patch+json' --request PATCH --data '[{\"op\": \"remove\", \"path\": \"/status/capacity/$resource_escaped\"}]' http://localhost:8001/api/v1/nodes/\$(hostname)/status"
-            ;;
-        *)
-            error "extended-resource: invalid action \"$action\""
+    add)
+        if [ -z "$value" ]; then
+            error "extended-resource: missing value to add to resource $resource"
             return 1
-            ;;
+        fi
+        vm-command "curl --header 'Content-Type: application/json-patch+json' --request PATCH --data '[{\"op\": \"add\", \"path\": \"/status/capacity/$resource_escaped\", \"value\": \"$value\"}]' http://localhost:8001/api/v1/nodes/\$(hostname)/status"
+        ;;
+    remove)
+        vm-command "curl --header 'Content-Type: application/json-patch+json' --request PATCH --data '[{\"op\": \"remove\", \"path\": \"/status/capacity/$resource_escaped\"}]' http://localhost:8001/api/v1/nodes/\$(hostname)/status"
+        ;;
+    *)
+        error "extended-resource: invalid action \"$action\""
+        return 1
+        ;;
     esac
 }
 
@@ -684,12 +687,12 @@ pyexec() { # script API
         echo -e "$py_cache"
         echo "# \$py_consts:"
         echo -e "$py_consts"
-    } > "$PYEXEC_STATE_PY"
+    } >"$PYEXEC_STATE_PY"
     for PYTHONCODE in "$@"; do
         {
             echo "from pyexec_state import *"
             echo -e "$PYTHONCODE"
-        } > "$PYEXEC_PY"
+        } >"$PYEXEC_PY"
         PYTHONPATH="$OUTPUT_DIR:$PYTHONPATH:$E2E_LIB_DIR" python3 "$PYEXEC_PY" 2>&1 | tee "$PYEXEC_LOG"
         last_exit_status=${PIPESTATUS[0]}
         if [ "$last_exit_status" != "0" ]; then
@@ -768,7 +771,7 @@ verify() { # script API
     get-py-cache
     for py_assertion in "$@"; do
         speed=1000 out "### Verifying assertion '$py_assertion'"
-        ( speed=1000 pyexec "
+        (speed=1000 pyexec "
 try:
     import time,sys
     assert(${py_assertion})
@@ -788,20 +791,20 @@ except IndexError as e:
     sys.stdout.flush()
     time.sleep(5)
     raise e
-" ) || {
-                out "### The assertion FAILED
+") || {
+            out "### The assertion FAILED
 ### post-mortem debug help begin ###
 cd $OUTPUT_DIR
 python3
 from pyexec_state import *
 $py_assertion
 ### post-mortem debug help end ###"
-                echo "verify: assertion '$py_assertion' failed." >> "$SUMMARY_FILE"
-                if is-hooked on_verify_fail; then
-                    run-hook on_verify_fail
-                else
-                    command-exit-if-not-interactive
-                fi
+            echo "verify: assertion '$py_assertion' failed." >>"$SUMMARY_FILE"
+            if is-hooked on_verify_fail; then
+                run-hook on_verify_fail
+            else
+                command-exit-if-not-interactive
+            fi
         }
         speed=1000 out "### The assertion holds."
     done
@@ -882,7 +885,7 @@ instantiate() { # script API
         error "error instantiating \"$FILENAME\": missing template ${template_file}"
     fi
     mkdir -p "$(dirname "$RESULT")" 2>/dev/null
-    eval "echo -e \"$(<"${template_file}")\"" | grep -v '^ *$' > "$RESULT" ||
+    eval "echo -e \"$(<"${template_file}")\"" | grep -v '^ *$' >"$RESULT" ||
         error "instantiating \"$FILENAME\" failed"
     echo "$RESULT"
 }
@@ -909,7 +912,7 @@ create() { # script API
     template_file=$(resolve-template "$1.yaml" "$TEST_DIR" "$TOPOLOGY_DIR" "$POLICY_DIR" "$SCRIPT_DIR")
     local namespace_args
     local template_kind
-    template_kind=$(awk '/kind/{print tolower($2)}' < "$template_file")
+    template_kind=$(awk '/kind/{print tolower($2)}' <"$template_file")
     local wait=${wait-Ready}
     local wait_t=${wait_t-240s}
     local images
@@ -929,13 +932,13 @@ create() { # script API
         error "error creating from template \"$template_file.yaml.in\": template file not found"
     fi
     for _ in $(seq 1 $n); do
-        kind_count[$template_kind]=$(( ${kind_count[$template_kind]} + 1 ))
+        kind_count[$template_kind]=$((${kind_count[$template_kind]} + 1))
         if [ -n "$default_name" ]; then
             local NAME="$default_name"
         else
-            local NAME="${template_kind}$(( ${kind_count[$template_kind]} - 1 ))" # the first pod is pod0
+            local NAME="${template_kind}$((${kind_count[$template_kind]} - 1))" # the first pod is pod0
         fi
-        eval "echo -e \"$(<"${template_file}")\"" | grep -v '^ *$' > "$OUTPUT_DIR/$NAME.yaml"
+        eval "echo -e \"$(<"${template_file}")\"" | grep -v '^ *$' >"$OUTPUT_DIR/$NAME.yaml"
         host-command "$SCP \"$OUTPUT_DIR/$NAME.yaml\" $VM_SSH_USER@$VM_IP:" || {
             command-error "copying \"$OUTPUT_DIR/$NAME.yaml\" to VM failed"
         }
@@ -944,21 +947,21 @@ create() { # script API
         if [ "${#pulled_images_on_vm[@]}" = "0" ]; then
             # Initialize pulled images available on VM
             vm-command "crictl -i unix://${k8scri_sock} images" >/dev/null &&
-            while read -r image tag _; do
-                if [ "$image" = "IMAGE" ]; then
-                    continue
-                fi
-                local notopdir_image="${image#*/}"
-                local norepo_image="${image##*/}"
-                if [ "$tag" = "latest" ]; then
-                    pulled_images_on_vm+=("$image")
-                    pulled_images_on_vm+=("$notopdir_image")
-                    pulled_images_on_vm+=("$norepo_image")
-                fi
-                pulled_images_on_vm+=("$image:$tag")
-                pulled_images_on_vm+=("$notopdir_image:$tag")
-                pulled_images_on_vm+=("$norepo_image:$tag")
-            done <<< "$COMMAND_OUTPUT"
+                while read -r image tag _; do
+                    if [ "$image" = "IMAGE" ]; then
+                        continue
+                    fi
+                    local notopdir_image="${image#*/}"
+                    local norepo_image="${image##*/}"
+                    if [ "$tag" = "latest" ]; then
+                        pulled_images_on_vm+=("$image")
+                        pulled_images_on_vm+=("$notopdir_image")
+                        pulled_images_on_vm+=("$norepo_image")
+                    fi
+                    pulled_images_on_vm+=("$image:$tag")
+                    pulled_images_on_vm+=("$notopdir_image:$tag")
+                    pulled_images_on_vm+=("$norepo_image:$tag")
+                done <<<"$COMMAND_OUTPUT"
         fi
         for image in $images; do
             if ! [[ " ${pulled_images_on_vm[*]} " == *" ${image} "* ]]; then
@@ -1013,13 +1016,14 @@ reset() { # script API
     fi
 }
 
+# shellcheck disable=SC2294
 interactive() { # script API
     # Usage: interactive
     #
     # Enter the interactive mode: read next script commands from
     # the standard input until "exit".
     echo "Entering the interactive mode until \"exit\"."
-    INTERACTIVE_MODE=$(( INTERACTIVE_MODE + 1 ))
+    INTERACTIVE_MODE=$((INTERACTIVE_MODE + 1))
     # shellcheck disable=SC2162
     while read -e -p "run.sh> " -a commands; do
         if [ "${commands[0]}" == "exit" ]; then
@@ -1027,7 +1031,7 @@ interactive() { # script API
         fi
         eval "${commands[@]}"
     done
-    INTERACTIVE_MODE=$(( INTERACTIVE_MODE - 1 ))
+    INTERACTIVE_MODE=$((INTERACTIVE_MODE - 1))
 }
 
 help() { # script API
@@ -1044,7 +1048,7 @@ help() { # script API
 
 test-user-code() {
     vm-command-q "kubectl get pods 2>&1 | grep -q NAME" && vm-command "kubectl delete pods --all --now"
-    ( eval "$code" ) || {
+    (eval "$code") || {
         TEST_FAILURES="${TEST_FAILURES} test script failed"
     }
 }
@@ -1066,43 +1070,43 @@ cri_resmgr_pidfile="/var/run/cri-resmgr*.pid"
 cri_resmgr_sock="/var/run/cri-resmgr/cri-resmgr.sock"
 cri_resmgr_agent_sock="/var/run/cri-resmgr/cri-resmgr-agent.sock"
 case "${k8scri}" in
-    "cri-resmgr|containerd")
-        k8scri_sock="${cri_resmgr_sock}"
-        cri_sock="/var/run/containerd/containerd.sock"
-        cri=containerd
-        ;;
-    "cri-resmgr|crio")
-        k8scri_sock="${cri_resmgr_sock}"
-        cri_sock="/var/run/crio/crio.sock"
-        cri=crio
-        ;;
-    "containerd")
-        k8scri_sock="/var/run/containerd/containerd.sock"
-        cri_sock="/var/run/containerd/containerd.sock"
-        cri=containerd
-        omit_cri_resmgr=1
-        omit_agent=1
-        ;;
-    "containerd&cri-resmgr")
-        k8scri_sock="/var/run/containerd/containerd.sock"
-        cri_sock="/var/run/containerd/containerd.sock"
-        cri=containerd
-        ;;
-    "crio")
-        k8scri_sock="/var/run/crio/crio.sock"
-        cri_sock="/var/run/crio/crio.sock"
-        cri=crio
-        omit_cri_resmgr=1
-        omit_agent=1
-        ;;
-    "crio&cri-resmgr")
-        k8scri_sock="/var/run/crio/crio.sock"
-        cri_sock="/var/run/crio/crio.sock"
-        cri=crio
-        ;;
-    *)
-        error "unsupported k8scri: \"${k8scri}\""
-        ;;
+"cri-resmgr|containerd")
+    k8scri_sock="${cri_resmgr_sock}"
+    cri_sock="/var/run/containerd/containerd.sock"
+    cri=containerd
+    ;;
+"cri-resmgr|crio")
+    k8scri_sock="${cri_resmgr_sock}"
+    cri_sock="/var/run/crio/crio.sock"
+    cri=crio
+    ;;
+"containerd")
+    k8scri_sock="/var/run/containerd/containerd.sock"
+    cri_sock="/var/run/containerd/containerd.sock"
+    cri=containerd
+    omit_cri_resmgr=1
+    omit_agent=1
+    ;;
+"containerd&cri-resmgr")
+    k8scri_sock="/var/run/containerd/containerd.sock"
+    cri_sock="/var/run/containerd/containerd.sock"
+    cri=containerd
+    ;;
+"crio")
+    k8scri_sock="/var/run/crio/crio.sock"
+    cri_sock="/var/run/crio/crio.sock"
+    cri=crio
+    omit_cri_resmgr=1
+    omit_agent=1
+    ;;
+"crio&cri-resmgr")
+    k8scri_sock="/var/run/crio/crio.sock"
+    cri_sock="/var/run/crio/crio.sock"
+    cri=crio
+    ;;
+*)
+    error "unsupported k8scri: \"${k8scri}\""
+    ;;
 esac
 distro_binaries=${distro_binaries:-0}
 containerd_src=${containerd_src:-}
@@ -1251,18 +1255,19 @@ fi
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$COMMAND_OUTPUT_DIR"
 rm -f "$COMMAND_OUTPUT_DIR"/0*
-( echo x > "$OUTPUT_DIR"/x && rm -f "$OUTPUT_DIR"/x ) || {
+(echo x >"$OUTPUT_DIR"/x && rm -f "$OUTPUT_DIR"/x) || {
     error "output directory outdir=$OUTPUT_DIR is not writable"
 }
 
 SUMMARY_FILE="$OUTPUT_DIR/summary.txt"
-echo -n "" > "$SUMMARY_FILE" || error "cannot write summary to \"$SUMMARY_FILE\""
+echo -n "" >"$SUMMARY_FILE" || error "cannot write summary to \"$SUMMARY_FILE\""
 
 ## Save test inputs and defaults for the record
-mkdir -p "$OUTPUT_DIR/input"; rm -f "$OUTPUT_DIR/input/*"
+mkdir -p "$OUTPUT_DIR/input"
+rm -f "$OUTPUT_DIR/input/*"
 for var in $input_var_names; do
     if [ -n "${!var}" ]; then
-        echo -e "${!var}" > "$OUTPUT_DIR/input/${var}.var"
+        echo -e "${!var}" >"$OUTPUT_DIR/input/${var}.var"
     fi
 done
 
@@ -1281,11 +1286,11 @@ if [ -z "$VM_IP" ] || [ -z "$VM_SSH_USER" ]; then
     screen-create-vm
 else
     if [ "$setup_proxies" == "1" ]; then
-	vm-setup-proxies
+        vm-setup-proxies
     fi
 
     if [ "$reinstall_bootstrap" == "1" ]; then
-	vm-bootstrap
+        vm-bootstrap
     fi
 fi
 
@@ -1444,9 +1449,9 @@ fi
 exit_status=0
 if [ "$mode" == "test" ]; then
     if [ -n "$TEST_FAILURES" ]; then
-        echo "Test verdict: FAIL" >> "$SUMMARY_FILE"
+        echo "Test verdict: FAIL" >>"$SUMMARY_FILE"
     else
-        echo "Test verdict: PASS" >> "$SUMMARY_FILE"
+        echo "Test verdict: PASS" >>"$SUMMARY_FILE"
     fi
     cat "$SUMMARY_FILE"
 fi
