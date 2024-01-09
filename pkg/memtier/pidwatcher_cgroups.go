@@ -120,14 +120,18 @@ func (w *PidWatcherCgroups) Stop() {
 func (w *PidWatcherCgroups) loop(singleshot bool) {
 	log.Debugf("PidWatcherCgroups: online\n")
 	defer log.Debugf("PidWatcherCgroups: offline\n")
+	w.mutex.Lock()
 	if w.config == nil {
 		log.Errorf("PidWatcherCgroups: cannot start loop without configuration")
+		w.mutex.Unlock()
 		return
 	}
 	ticker := time.NewTicker(time.Duration(w.config.IntervalMs) * time.Millisecond)
+	w.mutex.Unlock()
 	defer ticker.Stop()
 	for {
 		stats.Store(StatsHeartbeat{"PidWatcherCgroups.loop"})
+		w.mutex.Lock()
 		// Look for all pid files in the current cgroup hierarchy.
 		procPaths := map[string]setMemberType{}
 		for _, cgroupPath := range w.config.Cgroups {
@@ -147,8 +151,6 @@ func (w *PidWatcherCgroups) loop(singleshot bool) {
 				pidsFound[pid] = setMember
 			}
 		}
-
-		w.mutex.Lock()
 
 		// If requested to stop, quit without informing listeners.
 		if w.stop {
