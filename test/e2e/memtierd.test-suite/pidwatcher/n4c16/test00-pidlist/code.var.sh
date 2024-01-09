@@ -1,3 +1,6 @@
+#!/bin/bash
+
+# shellcheck disable=SC2154
 vm-command "[ -f /sys/kernel/mm/page_idle/bitmap ]" || {
     if [[ "$distro" != "debian-sid" && "$distro" != "ubuntu-22.04" ]]; then
         error "idlepage e2e test is implemented only for distro=debian-sid or distro=ubuntu-22.04"
@@ -57,11 +60,12 @@ policy:
 memtierd-start
 
 sleep 5
-memtierd-verify-scanned-pids $MEME0_PID $MEME1_PID $MEME2_PID
+memtierd-match-scanned-pids "$MEME0_PID" "$MEME1_PID" "$MEME2_PID"
 
 memtierd-stop
 
 echo -e "\n=== scenario 2: test pidlist with policy-heat and multi-tracker (softdirty and idlepage) ===\n"
+# shellcheck disable=SC2034
 MEMTIERD_YAML="
 policy:
   name: heat
@@ -101,7 +105,7 @@ policy:
 memtierd-start
 
 sleep 5
-memtierd-verify-scanned-pids $MEME0_PID $MEME1_PID $MEME2_PID
+memtierd-match-scanned-pids "$MEME0_PID" "$MEME1_PID" "$MEME2_PID"
 
 memtierd-stop
 

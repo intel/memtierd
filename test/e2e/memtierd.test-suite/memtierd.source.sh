@@ -1,3 +1,5 @@
+#!/bin/bash
+
 MEMTIERD_PORT=${MEMTIERD_PORT:-5555}
 MEMTIERD_OUTPUT=memtierd.output.txt
 
@@ -8,6 +10,7 @@ memtierd-setup() {
     memtierd-version-check || sleep 5
 }
 
+# shellcheck disable=SC2154
 memtierd-install() {
     if ! vm-command "command -v socat"; then
         distro-install-pkg socat
@@ -50,16 +53,16 @@ memtierd-version-check() {
         echo "WARNING"
         return 1
     }
-    host_ver=$(${memtierd_src}/bin/memtierd -version)
+    host_ver=$("${memtierd_src}"/bin/memtierd -version)
     vm-command "memtierd -version"
     vm_ver="$COMMAND_OUTPUT"
     if [[ "$host_ver" != "$vm_ver" ]]; then
         echo "WARNING"
         echo "WARNING memtierd version on VM differs from the latest build on host"
         echo "WARNING vm:"
-        echo "$vm_ver" | while read l; do echo "WARNING    $l"; done
+        echo "$vm_ver" | while read -r l; do echo "WARNING    $l"; done
         echo "WARNING host:"
-        echo "$host_ver" | while read l; do echo "WARNING    $l"; done
+        echo "$host_ver" | while read -r l; do echo "WARNING    $l"; done
         echo "WARNING"
         echo "WARNING Consider running tests with reinstall_memtierd=1"
         echo "WARNING"
@@ -96,7 +99,7 @@ memtierd-command() {
 
 memtierd-meme-start() {
     vm-command "nohup meme -bs ${MEME_BS:-1G} -brc ${MEME_BRC:-0} -brs ${MEME_BRS:-0} -bro ${MEME_BRO:-0} -bwc ${MEME_BWC:-0} -bws ${MEME_BWS:-0} -bwo ${MEME_BWO:-0} -ttl ${MEME_TTL:-1h} < /dev/null > meme.output.txt 2>&1 & sleep 2; cat meme.output.txt"
-    MEME_PID=$(awk '/pid:/{print $2}' <<<$COMMAND_OUTPUT)
+    MEME_PID=$(awk '/pid:/{print $2}' <<<"$COMMAND_OUTPUT")
     if [[ -z "$MEME_PID" ]]; then
         command-error "failed to start meme, pid not found"
     fi
@@ -120,30 +123,57 @@ next-round() {
     if [[ "$round_counter_val" -ge "$round_counter_max" ]]; then
         return 1
     fi
-    eval "$round_counter_var=$(($round_counter_val + 1))"
-    sleep $round_delay
+    eval "$round_counter_var=$(("$round_counter_val" + 1))"
+    sleep "$round_delay"
     return 0
 }
 
-memtierd-verify-scanned-pids() {
-    local expected_pid_count=$#
-
+# shellcheck disable=SC2034
+memtierd-match-scanned-pids() {
     for pid_regexp in "$@"; do
         round_number=0
         while ! (
             memtierd-command "stats -t memory_scans -f csv | awk -F, \"{print \\\$1}\""
-            grep ${pid_regexp} <<<$COMMAND_OUTPUT
+            grep "${pid_regexp}" <<<"$COMMAND_OUTPUT"
         ); do
             echo "grep pid matching ${pid_regexp} not found"
-            next-round round_number 5 1 || {
+            next-round round_number 5 1s || {
                 error "timeout: memtierd did not watch ${pid_regexp}"
             }
         done
     done
+}
 
-    memtierd-command 'stats -t memory_scans -f csv'
-    observed_pid_count="$(grep ^[0-9] <<<"$COMMAND_OUTPUT" | wc -l)"
-    if [[ "$observed_pid_count" != "$expected_pid_count" ]]; then
-        error "expected memtierd to watch ${expected_pid_count} pids, but got ${observed_pid_count} pids"
-    fi
+# shellcheck disable=SC2034
+memtierd-match-pageout() {
+    local pageout_regexp=$1
+    local round_counter_max=$2
+    local round_delay=$3
+    round_number=0
+    while ! (
+        memtierd-command "stats -t process_madvise -f csv | awk -F, \"{print \\\$6}\""
+        grep "${pageout_regexp}" <<<"$COMMAND_OUTPUT"
+    ); do
+        echo "grep PAGEOUT value matching ${pageout_regexp} not found"
+        next-round round_number "${round_counter_max}" "${round_delay}" || {
+            error "timeout: memtierd did not pageout expected amount of memory"
+        }
+    done
+}
+
+# shellcheck disable=SC2034
+memtierd-match-pagemoving() {
+    local pagemoving_regexp=$1
+    local round_counter_max=$2
+    local round_delay=$3
+    round_number=0
+    while ! (
+        memtierd-command "stats -t move_pages -f csv | awk -F, \"{print \\\$6\\\$7}\""
+        grep "${pagemoving_regexp}" <<<"$COMMAND_OUTPUT"
+    ); do
+        echo "grep PAGEMOVING value matching ${pagemoving_regexp} not found"
+        next-round round_number "${round_counter_max}" "${round_delay}" || {
+            error "timeout: memtierd did not move expected amount of memory"
+        }
+    done
 }

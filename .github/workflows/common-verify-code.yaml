@@ -40,10 +40,10 @@ jobs:
     - name: Lint check
       run: make lint
 
-    # FIXME(Jing Yan): once the following static checks are fixed, uncomment the following steps.
-    # - name: Shell check
-    #   run: make shellcheck
+    - name: Shell check
+      run: make shellcheck
 
+    # FIXME(Jing Yan): once the following static checks are fixed, uncomment the following steps.
     # - name: Golangci lint check
     #   run: make golangci-lint
 

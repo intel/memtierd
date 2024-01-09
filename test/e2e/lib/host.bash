@@ -60,7 +60,7 @@ host-set-vm-config() {
     mkdir -p "$HOST_VM_DATA_DIR"
     VM_COMPOSE_YAML="$HOST_VM_DATA_DIR/govm-compose.yaml"
     VM_DATA_CONFIG="$HOST_VM_DATA_DIR/vm-config"
-    cat > "$VM_DATA_CONFIG" <<EOF
+    cat >"$VM_DATA_CONFIG" <<EOF
 VM_NAME="$VM_NAME"
 VM_DISTRO="$VM_DISTRO"
 VM_CRI="$VM_CRI"
@@ -75,22 +75,22 @@ host-fetch-vm-image() {
     [ -d "$HOST_VM_IMAGE_DIR" ] || mkdir -p "$HOST_VM_IMAGE_DIR" ||
         error "cannot create directory for VM images: $HOST_VM_IMAGE_DIR"
     case $file in
-        *.xz)
-            image=${file%.xz}
-            decompress="xz -d"
-            ;;
-        *.bz2)
-            image=${file%.bz2}
-            decompress="bzip -d"
-            ;;
-        *.gz)
-            image=${file%.gz}
-            decompress="gzip -d"
-            ;;
-        *)
-            image="$file"
-            decompress=":"
-            ;;
+    *.xz)
+        image=${file%.xz}
+        decompress="xz -d"
+        ;;
+    *.bz2)
+        image=${file%.bz2}
+        decompress="bzip -d"
+        ;;
+    *.gz)
+        image=${file%.gz}
+        decompress="gzip -d"
+        ;;
+    *)
+        image="$file"
+        decompress=":"
+        ;;
     esac
     [ -f "$HOST_VM_IMAGE_DIR/$image" ] || {
         echo "VM image $HOST_VM_IMAGE_DIR/$image not found..."
@@ -101,7 +101,7 @@ host-fetch-vm-image() {
         }
         if [ -n "$decompress" ]; then
             echo "decompressing VM image $file..."
-            ( cd "$HOST_VM_IMAGE_DIR" && $decompress $file ) ||
+            (cd "$HOST_VM_IMAGE_DIR" && $decompress $file) ||
                 error "failed to decompress $file to $image using $decompress"
         fi
         if [ ! -f "$HOST_VM_IMAGE_DIR/$image" ]; then
@@ -153,7 +153,7 @@ host-create-vm() {
             error "cannot take both VM_QEMU_CPUMEM and numa node JSON"
         fi
         VM_QEMU_CPUMEM=$(echo "$TOPOLOGY" | "$HOST_LIB_DIR/topology2qemuopts.py")
-        if [ "$?" -ne  "0" ]; then
+        if [ "$?" -ne "0" ]; then
             error "error in topology"
         fi
     fi
@@ -162,7 +162,7 @@ host-create-vm() {
     ${GOVM} ls | grep -q "$VM_NAME" || {
         host-fetch-vm-image
         mkdir -p "$(dirname "$VM_COMPOSE_YAML")"
-        vm-compose-govm-template > "$VM_COMPOSE_YAML"
+        vm-compose-govm-template >"$VM_COMPOSE_YAML"
         host-command "${GOVM} compose -f \"$VM_COMPOSE_YAML\""
         echo "# VM base image  : $VM_IMAGE"
         echo "# VM govm yaml   : $VM_COMPOSE_YAML"
@@ -203,22 +203,23 @@ host-create-vm() {
 }
 
 get-ssh-timeout() {
-    echo $((`date +%s` + $1))
+    echo $(($(date +%s) + $1))
 }
 
 host-wait-vm-ssh-server() {
-    timeout=`get-ssh-timeout 120`
+    timeout=$(get-ssh-timeout 120)
 
     while [ "${1#-}" != "$1" ] && [ -n "$1" ]; do
         case "$1" in
-            --timeout)
-                timeout=`get-ssh-timeout $2`
-                shift; shift
-                ;;
-            *)
-                invalid="${invalid}${invalid:+,}\"$1\""
-                shift
-                ;;
+        --timeout)
+            timeout=$(get-ssh-timeout $2)
+            shift
+            shift
+            ;;
+        *)
+            invalid="${invalid}${invalid:+,}\"$1\""
+            shift
+            ;;
         esac
     done
     if [ -n "$invalid" ]; then
@@ -248,15 +249,15 @@ host-wait-vm-ssh-server() {
     print_info=1
 
     while ! $SSH ${VM_SSH_USER}@${VM_IP} -o ConnectTimeout=2 true 2>/dev/null; do
-	CURR_TIME=`date +%s`
-	if [ $CURR_TIME -gt $timeout ]; then
+        CURR_TIME=$(date +%s)
+        if [ $CURR_TIME -gt $timeout ]; then
             error "timeout"
-	fi
+        fi
 
-	if [ "$print_info" == 1 ]; then
+        if [ "$print_info" == 1 ]; then
             echo -n "Waiting for VM SSH server to respond..."
-	    print_info=0
-	fi
+            print_info=0
+        fi
         sleep 2
         echo -n "."
     done
@@ -272,7 +273,7 @@ host-wait-cloud-init() {
         fi
         sleep 2
         echo -n "."
-        retries_left=$(( $retries_left - 1 ))
+        retries_left=$(($retries_left - 1))
         if [ "$retries_left" == "0" ]; then
             error "timeout"
         fi
@@ -297,7 +298,7 @@ host-delete-vm() {
 }
 
 host-is-encrypted-ssh-key() {
-    ssh-keygen -y -f "$1" < /dev/null >& /dev/null
+    ssh-keygen -y -f "$1" </dev/null >&/dev/null
     if [ $? != 0 ]; then
         return 0
     else

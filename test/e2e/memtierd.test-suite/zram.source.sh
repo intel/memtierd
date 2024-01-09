@@ -1,3 +1,5 @@
+#!/bin/bash
+
 zram-swap() {
     # Usage: memtierd-zram-swap <SIZE>
     #        memtierd-zram-swap off

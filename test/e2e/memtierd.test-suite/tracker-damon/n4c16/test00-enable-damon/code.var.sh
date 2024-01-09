@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Make sure the system has DAMON support enabled.
 vm-command "[ -d /sys/kernel/mm/damon ]" || {
     damon-idlepage-setup
@@ -8,6 +10,7 @@ memtierd-setup
 
 MEME_CGROUP=e2e-meme MEME_BS=1G MEME_BWC=1 MEME_BWS=300M memtierd-meme-start
 
+# shellcheck disable=SC2034
 MEMTIERD_YAML="
 policy:
   name: heat
