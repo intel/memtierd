@@ -34,6 +34,19 @@ jobs:
         go install -v github.com/fzipp/gocyclo/cmd/gocyclo@latest
         go install -v golang.org/x/lint/golint@latest
 
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.x
+
+    - name: Install pip3 and codespell for spell checks
+      run: |
+        python -m pip install --upgrade pip
+        pip install codespell
+
+    - name: Spell check
+      run: make spellcheck
+
     - name: Format check
       run: make format
 

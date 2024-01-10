@@ -64,7 +64,7 @@ type Heats map[int]*HeatRanges
 // HeatRanges is a slice of HeatRange pointers.
 type HeatRanges []*HeatRange
 
-// HeatRange stores memory addresse, length, heat information and timestamps.
+// HeatRange stores memory addresses, length, heat information and timestamps.
 type HeatRange struct {
 	addr    uint64
 	length  uint64  // number of pages

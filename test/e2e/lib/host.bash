@@ -158,7 +158,7 @@ host-create-vm() {
         fi
     fi
     host-require-govm
-    # If VM does not exist, create it from scrach
+    # If VM does not exist, create it from scratch
     ${GOVM} ls | grep -q "$VM_NAME" || {
         host-fetch-vm-image
         mkdir -p "$(dirname "$VM_COMPOSE_YAML")"

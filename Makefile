@@ -1,7 +1,7 @@
 # We use bashisms in this Makefile.
 SHELL := /bin/bash
 
-# Go compiler/toolchain and extra related binaries we ues/need.
+# Go compiler/toolchain and extra related binaries we use/need.
 GO_PARALLEL :=
 GO_CMD      := go
 GO_BUILD    := $(GO_CMD) build $(GO_PARALLEL)
@@ -25,6 +25,9 @@ GO_CILINT_RUNFLAGS := --build-tags $(TEST_TAGS)
 
 # ShellCheck for checking shell scripts.
 SHELLCHECK := shellcheck
+
+# codespell for checking spell issues.
+SPELLCHECK := codespell
 
 # Binaries and directories for installation.
 INSTALL    := install
@@ -246,6 +249,23 @@ shellcheck:
 		else \
 			echo "shellcheck not installed, skip shellcheck"; \
 		fi
+
+spellcheck:
+	$(Q)if hash $(SPELLCHECK) 2> /dev/null; then \
+		rc=0; \
+		for f in $$(find . -type f \( -name '*.md' -o -name '*.go' -o -name '*.sh' -o -name '*.bash' \)); do \
+			echo "spellchecking $$f..."; \
+			$(SPELLCHECK) --ignore-words-list damon,ths,uptodate,aranges,nowns $$f || rc=$$?; \
+		done; \
+		if [ $$rc -ne 0 ]; then \
+			echo "Spellcheck found errors"; \
+			exit $$rc; \
+		else \
+			echo "Spellcheck passed"; \
+		fi \
+	else \
+		echo "codespell not installed, skip spellcheck"; \
+	fi
 
 #
 # Rules for running unit/module tests.
