@@ -1332,7 +1332,7 @@ if [ "$reinstall_containerd" == "1" ] || [ "$reinstall_crio" == "1" ] || ! vm-co
 fi
 
 # runc is installed as a dependency of containerd and crio.
-# If reinstalling runc is explictly wished for, it is safe to do
+# If reinstalling runc is explicitly wished for, it is safe to do
 # only after (re)installing containerd/crio. Otherwise
 # a custom locally built runc may be overridden from packages.
 if [ "$reinstall_runc" == "1" ] || ! vm-command-q "type -p runc >/dev/null"; then

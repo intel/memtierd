@@ -1186,7 +1186,7 @@ func parseOptRanges(rangeStr string) ([]AddrRange, error) {
 	for _, addrRangeStr := range strings.Split(rangeStr, ",") {
 		ar, err := NewAddrRangeFromString(addrRangeStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid addresss range %q, expected STARTADDR, STARTADDR-STOPADDR or STARTADDR+SIZE[UNIT]", addrRangeStr)
+			return nil, fmt.Errorf("invalid address range %q, expected STARTADDR, STARTADDR-STOPADDR or STARTADDR+SIZE[UNIT]", addrRangeStr)
 		}
 		addrRanges = append(addrRanges, *ar)
 	}

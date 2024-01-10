@@ -149,7 +149,7 @@ func TestOverwrite(t *testing.T) {
 	expectDataOk(9*PS, 9, true)
 	expectDataOk(10*PS, 1, true)
 
-	// Exact overwrite many existing datas
+	// Exact overwrite many existing data
 	ads.SetData(AR(25*PS, 3), 10)
 	expectLen(6) // remove 25:3, 26:4, 27:3, add 25-27:10
 	expectDataOk(24*PS, 0, false)
@@ -160,7 +160,7 @@ func TestOverwrite(t *testing.T) {
 	expectDataOk(29*PS, 8, true)
 	expectDataOk(30*PS, 0, false)
 
-	// Overlapping overwrite many existing datas
+	// Overlapping overwrite many existing data
 	ads.SetData(AR(24*PS, 5), 11)
 	expectLen(6) // remove 25-27:10, add 24-28:11
 	expectDataOk(23*PS, 0, false)
@@ -185,7 +185,7 @@ func TestOverwrite(t *testing.T) {
 	expectDataOk(24*PS, 12, true)
 	expectDataOk(25*PS, 11, true)
 
-	// Overwrite everything but the first and the last datas
+	// Overwrite everything but the first and the last data
 	ads.SetData(AR(2*PS, 27), 13)
 	expectLen(3)
 	expectDataOk(0*PS, 0, false)

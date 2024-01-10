@@ -99,7 +99,7 @@ func (a *AddrDatas) Dump() string {
 }
 
 // SetData associates data with an address range. If the address range
-// overlaps with existing ranges with some other data, data assocated
+// overlaps with existing ranges with some other data, data associated
 // with overlapping parts will be overwritten.
 func (a *AddrDatas) SetData(ar AddrRange, data interface{}) {
 	if ar.length <= 0 {

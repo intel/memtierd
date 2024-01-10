@@ -451,7 +451,7 @@ be configured with the following parameters:
   before new scan. The default is 10000.
 
 Use `stats -t memory_scans` in the memtierd prompt to see how long it
-takes to scan the memory of traked processes. This helps adjusting
+takes to scan the memory of tracked processes. This helps adjusting
 intervals suitable for the workload at hand.
 
 ### The softdirty tracker

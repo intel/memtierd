@@ -112,7 +112,7 @@ type damonSysfs struct {
 	nrKdamonds   int   // number of kdamonds available in the system
 	kdamondsList []int // kdamonds instances available for this tracker
 	kdamonds     []*kdamondInfo
-	// // kdamondIndexPids: index in the kdamondsList (not in the system) -> pids of tracked worloads
+	// // kdamondIndexPids: index in the kdamondsList (not in the system) -> pids of tracked workloads
 	// kdamondIndexPids [][]int
 	// kdamondPid -> targetID -> pid of tracked workload
 	kdamondPidTargetIDPid map[int][]int
@@ -917,7 +917,7 @@ func (t *TrackerDamon) legacyTargetIDToPid(targetID int64, start uint64, end uin
 	// processes. If we would go through only address ranges we
 	// have seen sometime earlier, we might end up trusting only
 	// matching address range yet that would belong to a wrong
-	// processs.
+	// processes.
 	stats.Store(StatsHeartbeat{"TrackerDamon.targetIdToPid:read /proc/PID/*maps"})
 	matchingPid := 0
 	matchingPids := 0
