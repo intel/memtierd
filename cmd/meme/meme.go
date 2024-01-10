@@ -68,11 +68,7 @@ var perfPrintInterval time.Duration
 
 var constPagesize int = os.Getpagesize()
 
-func bExerciser(exerciserID int, read, write bool, ba *bArray, offset int64, count int64, interval time.Duration, portionCount int, offsetDelta int64, countDelta int64) {
-	b := ba.b
-	if count >= int64(len(b[offset:])) {
-		count = int64(len(b[offset:])) - 1
-	}
+func getExerciserDesc(read, write bool) string {
 	exerciserDesc := ""
 	if read {
 		exerciserDesc += "read"
@@ -80,6 +76,46 @@ func bExerciser(exerciserID int, read, write bool, ba *bArray, offset int64, cou
 	if write {
 		exerciserDesc += "write"
 	}
+	return exerciserDesc
+}
+
+func generatePortionOrder(portionCount int) []int {
+	portionOrder := make([]int, portionCount)
+	for p := 0; p < len(portionOrder); p++ {
+		portionOrder[p] = p
+	}
+	rand.Shuffle(len(portionOrder), func(i, j int) { portionOrder[i], portionOrder[j] = portionOrder[j], portionOrder[i] })
+	if len(portionOrder) > 1 {
+		fmt.Printf("portion order: %v\n", portionOrder)
+	}
+	return portionOrder
+}
+
+func writeWithPortions(b []byte, portionSize int64, portionCount int, roundStartIndex int64, portionOrder []int) {
+	for i := int64(0); i < portionSize; i++ {
+		for p := 0; p < portionCount; p++ {
+			nextIndex := roundStartIndex + int64(portionOrder[p])*portionSize + i
+			b[nextIndex] = bValue
+			bValue++
+		}
+	}
+}
+
+func readWithPortions(b []byte, portionSize int64, portionCount int, roundStartIndex int64, portionOrder []int) {
+	for i := int64(0); i < portionSize; i++ {
+		for p := 0; p < portionCount; p++ {
+			nextIndex := roundStartIndex + int64(portionOrder[p])*portionSize + i
+			bValue += b[nextIndex]
+		}
+	}
+}
+
+func bExerciser(exerciserID int, read, write bool, ba *bArray, offset int64, count int64, interval time.Duration, portionCount int, offsetDelta int64, countDelta int64) {
+	b := ba.b
+	if count >= int64(len(b[offset:])) {
+		count = int64(len(b[offset:])) - 1
+	}
+	exerciserDesc := getExerciserDesc(read, write)
 	fmt.Printf("start exerciser %d: %s %s\n", exerciserID, exerciserDesc, bAddrRange(ba.b[offset:], int(count)))
 	round := int64(0)
 	defer func() {
@@ -90,18 +126,10 @@ func bExerciser(exerciserID int, read, write bool, ba *bArray, offset int64, cou
 	perfPrintRounds := int64(0)
 
 	loopStart := time.Now()
-
 	if portionCount < 1 {
 		portionCount = 1
 	}
-	portionOrder := make([]int, portionCount)
-	for p := 0; p < len(portionOrder); p++ {
-		portionOrder[p] = p
-	}
-	rand.Shuffle(len(portionOrder), func(i, j int) { portionOrder[i], portionOrder[j] = portionOrder[j], portionOrder[i] })
-	if len(portionOrder) > 1 {
-		fmt.Printf("portion order: %v\n", portionOrder)
-	}
+	portionOrder := generatePortionOrder(portionCount)
 
 	for ba.readers > 0 || ba.writers > 0 {
 		roundStartIndex := (offset + (offsetDelta * round)) % int64(len(b))
@@ -111,21 +139,10 @@ func bExerciser(exerciserID int, read, write bool, ba *bArray, offset int64, cou
 		}
 		portionSize := roundCount / int64(portionCount)
 		if write {
-			for i := int64(0); i < portionSize; i++ {
-				for p := 0; p < portionCount; p++ {
-					nextIndex := roundStartIndex + int64(portionOrder[p])*portionSize + i
-					b[nextIndex] = bValue
-					bValue++
-				}
-			}
+			writeWithPortions(b, portionSize, portionCount, roundStartIndex, portionOrder)
 		}
 		if read {
-			for i := int64(0); i < portionSize; i++ {
-				for p := 0; p < portionCount; p++ {
-					nextIndex := roundStartIndex + int64(portionOrder[p])*portionSize + i
-					bValue += b[nextIndex]
-				}
-			}
+			readWithPortions(b, portionSize, portionCount, roundStartIndex, portionOrder)
 		}
 		loopDuration := time.Since(loopStart)
 
