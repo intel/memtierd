@@ -125,6 +125,63 @@ func (w *PidWatcherProc) Dump([]string) string {
 		w.config, w.pidsReported, w.pidListener, w.stop)
 }
 
+func (w *PidWatcherProc) readPids() map[int]setMemberType {
+	pidsFound := map[int]setMemberType{}
+	matches, err := filepath.Glob("/proc/*/exe")
+	if err != nil {
+		stats.Store(StatsHeartbeat{fmt.Sprintf("PidWatcherProc.error: glob failed: %s", err)})
+	}
+	for _, file := range matches {
+		if _, err := os.Readlink(file); err != nil {
+			// a kernel thread or the process is already gone
+			continue
+		}
+		if pid, err := strconv.Atoi(strings.Split(file, "/")[2]); err == nil {
+			pidsFound[pid] = setMember
+		}
+	}
+	return pidsFound
+}
+
+func (w *PidWatcherProc) calculateNewAndOldPids(pidsFound map[int]setMemberType) ([]int, []int) {
+	newPids := []int{}
+	oldPids := []int{}
+
+	for foundPid := range pidsFound {
+		if _, ok := w.pidsReported[foundPid]; !ok {
+			w.pidsReported[foundPid] = setMember
+			newPids = append(newPids, foundPid)
+		}
+	}
+
+	for oldPid := range w.pidsReported {
+		if _, ok := pidsFound[oldPid]; !ok {
+			delete(w.pidsReported, oldPid)
+			oldPids = append(oldPids, oldPid)
+		}
+	}
+
+	return newPids, oldPids
+}
+
+func (w *PidWatcherProc) reportNewAndOldPids(newPids, oldPids []int) {
+	if len(newPids) > 0 {
+		if w.pidListener != nil {
+			w.pidListener.AddPids(newPids)
+		} else {
+			log.Warnf("pidwatcher proc: ignoring new pids %v because nobody is listening", newPids)
+		}
+	}
+
+	if len(oldPids) > 0 {
+		if w.pidListener != nil {
+			w.pidListener.RemovePids(oldPids)
+		} else {
+			log.Warnf("pidwatcher proc: ignoring disappeared pids %v because nobody is listening", oldPids)
+		}
+	}
+}
+
 // loop is a helper function of PidWatcherProc that performs the actual polling.
 // It continuously looks for new processes under /proc and reports changes to the PidListener.
 func (w *PidWatcherProc) loop(singleshot bool) {
@@ -135,20 +192,7 @@ func (w *PidWatcherProc) loop(singleshot bool) {
 	for {
 		stats.Store(StatsHeartbeat{"PidWatcherProc.loop"})
 		// Read all pids under /proc
-		pidsFound := map[int]setMemberType{}
-		matches, err := filepath.Glob("/proc/*/exe")
-		if err != nil {
-			stats.Store(StatsHeartbeat{fmt.Sprintf("PidWatcherProc.error: glob failed: %s", err)})
-		}
-		for _, file := range matches {
-			if _, err := os.Readlink(file); err != nil {
-				// a kernel thread or the process is already gone
-				continue
-			}
-			if pid, err := strconv.Atoi(strings.Split(file, "/")[2]); err == nil {
-				pidsFound[pid] = setMember
-			}
-		}
+		pidsFound := w.readPids()
 
 		w.mutex.Lock()
 
@@ -158,39 +202,11 @@ func (w *PidWatcherProc) loop(singleshot bool) {
 			break
 		}
 
-		// Gather found pids that have not been reported.
-		newPids := []int{}
-		for foundPid := range pidsFound {
-			if _, ok := w.pidsReported[foundPid]; !ok {
-				w.pidsReported[foundPid] = setMember
-				newPids = append(newPids, foundPid)
-			}
-		}
-
-		// Gather reported pids that have disappeared.
-		oldPids := []int{}
-		for oldPid := range w.pidsReported {
-			if _, ok := pidsFound[oldPid]; !ok {
-				delete(w.pidsReported, oldPid)
-				oldPids = append(oldPids, oldPid)
-			}
-		}
+		// Gather found pids that have not been reported and reported pids that have disappeared.
+		newPids, oldPids := w.calculateNewAndOldPids(pidsFound)
 
 		// Report if there are any changes in pids.
-		if len(newPids) > 0 {
-			if w.pidListener != nil {
-				w.pidListener.AddPids(newPids)
-			} else {
-				log.Warnf("pidwatcher proc: ignoring new pids %v because nobody is listening", newPids)
-			}
-		}
-		if len(oldPids) > 0 {
-			if w.pidListener != nil {
-				w.pidListener.RemovePids(oldPids)
-			} else {
-				log.Warnf("pidwatcher proc: ignoring disappeared pids %v because nobody is listening", oldPids)
-			}
-		}
+		w.reportNewAndOldPids(newPids, oldPids)
 
 		w.mutex.Unlock()
 

@@ -117,6 +117,69 @@ func (w *PidWatcherCgroups) Stop() {
 	w.stop = true
 }
 
+func (w *PidWatcherCgroups) findProcPaths() map[string]setMemberType {
+	procPaths := map[string]setMemberType{}
+	for _, cgroupPath := range w.config.Cgroups {
+		for _, path := range findFiles(cgroupPath, "cgroup.procs") {
+			procPaths[path] = setMember
+		}
+	}
+	return procPaths
+}
+
+func (w *PidWatcherCgroups) readPidsInPaths(procPaths map[string]setMemberType) map[int]setMemberType {
+	pidsFound := map[int]setMemberType{}
+	for path := range procPaths {
+		pidsNow, err := readPids(path)
+		if err == nil {
+			for _, pid := range pidsNow {
+				pidsFound[pid] = setMember
+			}
+		} else {
+			delete(procPaths, path)
+		}
+	}
+	return pidsFound
+}
+
+func (w *PidWatcherCgroups) calculateNewAndOldPids(pidsFound map[int]setMemberType) ([]int, []int) {
+	newPids := []int{}
+	oldPids := []int{}
+
+	for foundPid := range pidsFound {
+		if _, ok := w.pidsReported[foundPid]; !ok {
+			w.pidsReported[foundPid] = setMember
+			newPids = append(newPids, foundPid)
+		}
+	}
+
+	for oldPid := range w.pidsReported {
+		if _, ok := pidsFound[oldPid]; !ok {
+			delete(w.pidsReported, oldPid)
+			oldPids = append(oldPids, oldPid)
+		}
+	}
+
+	return newPids, oldPids
+}
+
+func (w *PidWatcherCgroups) reportNewAndOldPids(newPids, oldPids []int) {
+	if len(newPids) > 0 {
+		if w.pidListener != nil {
+			w.pidListener.AddPids(newPids)
+		} else {
+			log.Warnf("pidwatcher cgroup: ignoring new pids %v because nobody is listening", newPids)
+		}
+	}
+	if len(oldPids) > 0 {
+		if w.pidListener != nil {
+			w.pidListener.RemovePids(oldPids)
+		} else {
+			log.Warnf("pidwatcher cgroup: ignoring disappeared pids %v because nobody is listening", oldPids)
+		}
+	}
+}
+
 func (w *PidWatcherCgroups) loop(singleshot bool) {
 	log.Debugf("PidWatcherCgroups: online\n")
 	defer log.Debugf("PidWatcherCgroups: offline\n")
@@ -133,24 +196,10 @@ func (w *PidWatcherCgroups) loop(singleshot bool) {
 		stats.Store(StatsHeartbeat{"PidWatcherCgroups.loop"})
 		w.mutex.Lock()
 		// Look for all pid files in the current cgroup hierarchy.
-		procPaths := map[string]setMemberType{}
-		for _, cgroupPath := range w.config.Cgroups {
-			for _, path := range findFiles(cgroupPath, "cgroup.procs") {
-				procPaths[path] = setMember
-			}
-		}
+		procPaths := w.findProcPaths()
 
 		// Read all pids in pid files.
-		pidsFound := map[int]setMemberType{}
-		for path := range procPaths {
-			pidsNow, err := readPids(path)
-			if err != nil {
-				delete(procPaths, path)
-			}
-			for _, pid := range pidsNow {
-				pidsFound[pid] = setMember
-			}
-		}
+		pidsFound := w.readPidsInPaths(procPaths)
 
 		// If requested to stop, quit without informing listeners.
 		if w.stop {
@@ -158,39 +207,11 @@ func (w *PidWatcherCgroups) loop(singleshot bool) {
 			break
 		}
 
-		// Gather found pids that have not been reported.
-		newPids := []int{}
-		for foundPid := range pidsFound {
-			if _, ok := w.pidsReported[foundPid]; !ok {
-				w.pidsReported[foundPid] = setMember
-				newPids = append(newPids, foundPid)
-			}
-		}
-
-		// Gather reported pids that have disappeared.
-		oldPids := []int{}
-		for oldPid := range w.pidsReported {
-			if _, ok := pidsFound[oldPid]; !ok {
-				delete(w.pidsReported, oldPid)
-				oldPids = append(oldPids, oldPid)
-			}
-		}
+		// Gather found pids that have not been reported and reported pids that have disappeared.
+		newPids, oldPids := w.calculateNewAndOldPids(pidsFound)
 
 		// Report if there are any changes in pids.
-		if len(newPids) > 0 {
-			if w.pidListener != nil {
-				w.pidListener.AddPids(newPids)
-			} else {
-				log.Warnf("pidwatcher cgroup: ignoring new pids %v because nobody is listening", newPids)
-			}
-		}
-		if len(oldPids) > 0 {
-			if w.pidListener != nil {
-				w.pidListener.RemovePids(oldPids)
-			} else {
-				log.Warnf("pidwatcher cgroup: ignoring disappeared pids %v because nobody is listening", oldPids)
-			}
-		}
+		w.reportNewAndOldPids(newPids, oldPids)
 
 		w.mutex.Unlock()
 
