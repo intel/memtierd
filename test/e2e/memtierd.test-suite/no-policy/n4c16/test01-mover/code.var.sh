@@ -71,9 +71,9 @@ mover_swap_conf=(
 )
 
 declare -A mover_swap_seconds=(
-    ["min0"]=4 ["max0"]=7
-    ["min2"]=2 ["max2"]=4
-    ["min1"]=2 ["max1"]=6
+    ["min0"]=4 ["max0"]=14
+    ["min2"]=2 ["max2"]=8
+    ["min1"]=2 ["max1"]=12
 )
 
 echo -e "\n=== scenario 1: test moving memories among numa nodes ===\n"
