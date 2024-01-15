@@ -73,7 +73,7 @@ grep " 7[0-9][0-9] " <<<"$COMMAND_OUTPUT" || {
 
 echo "stop meme, expect all memory to be paged out"
 vm-command "kill -STOP ${MEME_PID}"
-memtierd-match-pageout "1\.[0-2]" 5 6
+memtierd-match-pageout "1\.[0-2]" 5 1
 
 echo "continue meme, expect 300 MB to be swapped in by OS"
 vm-command "kill -CONT ${MEME_PID}"
@@ -85,7 +85,7 @@ grep " 7[0-9][0-9] " <<<"$COMMAND_OUTPUT" || {
 
 echo "stop meme again, verify that all memory gets paged out again"
 vm-command "kill -STOP ${MEME_PID}"
-memtierd-match-pageout "1\.[2-5]" 6 6
+memtierd-match-pageout "1\.[2-5]" 5 1
 
 memtierd-stop
 memtierd-meme-stop
