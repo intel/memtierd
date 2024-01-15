@@ -783,6 +783,7 @@ func (p *Prompt) cmdMover(args []string) CommandStatus {
 		p.mover.RemoveTask(*removeTask)
 	}
 	if *wait {
+		time.Sleep(100 * time.Millisecond)
 		p.output("mover wait received: %s\n", <-p.mover.Wait(thsPaused, thsAllDone))
 	}
 	return csOk
