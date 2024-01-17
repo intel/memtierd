@@ -110,9 +110,8 @@ memtierd-meme-start() {
 
 memtierd-meme-stop() {
     vm-command "killall -KILL meme"
-    sleep 2
-    if [[ -z "$MEME_PID" ]] && [[ -n "$MEME_CGROUP" ]]; then
-        vm-command "sudo rmdir /sys/fs/cgroup/$MEME_CGROUP"
+    if [[ -n "$MEME_CGROUP" ]]; then
+        vm-command "sleep 1; rmdir /sys/fs/cgroup/$MEME_CGROUP || true"
     fi
 }
 
