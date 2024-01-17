@@ -118,19 +118,20 @@ func (t *TrackerIdlePage) GetConfigJSON() string {
 }
 
 func (t *TrackerIdlePage) addRanges(pid int) {
-	delete(t.regions, pid)
+	t.regions[pid] = []*AddrRanges{}
 	p := NewProcess(pid)
 	if ar, err := p.AddressRanges(); err == nil {
 		// filter out single-page address ranges
 		ar = ar.Filter(func(r AddrRange) bool { return r.Length() > 1 })
 		ar = ar.SplitLength(t.config.PagesInRegion)
 		for _, r := range ar.Flatten() {
-			if regions, ok := t.regions[pid]; ok {
-				t.regions[pid] = append(regions, r)
-			} else {
-				t.regions[pid] = []*AddrRanges{r}
-			}
+			t.regions[pid] = append(t.regions[pid], r)
 		}
+	} else {
+		delete(t.regions, pid)
+		t.mutex.Lock()
+		delete(t.accesses, pid)
+		t.mutex.Unlock()
 	}
 }
 
