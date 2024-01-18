@@ -915,6 +915,7 @@ func (p *Prompt) cmdTracker(args []string) CommandStatus {
 	create := p.f.String("create", "", "create new tracker NAME")
 	config := p.f.String("config", "", "configure tracker with JSON string")
 	configDump := p.f.Bool("config-dump", false, "dump current configuration")
+	configFile := p.f.String("config-file", "", "reconfigure tracker with JSON FILE")
 	start := p.f.String("start", "", "start tracking PID[,PID...]")
 	reset := p.f.Bool("reset", false, "reset page access counters")
 	stop := p.f.Bool("stop", false, "stop tracker")
@@ -943,6 +944,18 @@ func (p *Prompt) cmdTracker(args []string) CommandStatus {
 	if p.tracker == nil {
 		p.output("no tracker, create one with -create NAME [-config CONFIG]\n")
 		return csOk
+	}
+	if *configFile != "" {
+		configJSON, err := os.ReadFile(*configFile)
+		if err != nil {
+			p.output("reading file %q failed: %s", *configFile, err)
+			return csOk
+		}
+		err = p.tracker.SetConfigJSON(string(configJSON))
+		if err != nil {
+			p.output("config failed: %s\n", err)
+			return csOk
+		}
 	}
 	if *config != "" {
 		if err := p.tracker.SetConfigJSON(*config); err != nil {
