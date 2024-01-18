@@ -140,6 +140,7 @@ func (t *TrackerSoftDirty) addRanges(pid int) {
 func (t *TrackerSoftDirty) AddPids(pids []int) {
 	log.Debugf("TrackerSoftDirty: AddPids(%v)\n", pids)
 	for _, pid := range pids {
+		t.clearPageBits(pid)
 		t.regionsMutex.Lock()
 		t.addRanges(pid)
 		t.regionsMutex.Unlock()
@@ -214,7 +215,7 @@ func (t *TrackerSoftDirty) Start() error {
 		return fmt.Errorf("sampler already running")
 	}
 	t.toSampler = make(chan byte, 1)
-	t.clearPageBits()
+	t.clearPageBitsForRegionPids()
 	go t.sampler()
 	return nil
 }
@@ -254,7 +255,7 @@ func (t *TrackerSoftDirty) sampler() {
 				lastRegionsUpdateNs = currentNs
 			}
 			t.countPages()
-			t.clearPageBits()
+			t.clearPageBitsForRegionPids()
 		}
 	}
 }
@@ -426,19 +427,23 @@ func (t *TrackerSoftDirty) regionsPids() []int {
 	return pids
 }
 
-func (t *TrackerSoftDirty) clearPageBits() {
+func (t *TrackerSoftDirty) clearPageBits(pid int) {
 	var err error
+	pidString := strconv.Itoa(pid)
+	path := "/proc/" + pidString + "/clear_refs"
+	err = procWrite(path, []byte("4\n"))
+	if t.config.TrackReferenced && err == nil {
+		err = procWrite(path, []byte("1\n"))
+	}
+	if err != nil {
+		// This process cannot be tracked anymore, remove it.
+		t.removePid(pid)
+	}
+}
+
+func (t *TrackerSoftDirty) clearPageBitsForRegionPids() {
 	for _, pid := range t.regionsPids() {
-		pidString := strconv.Itoa(pid)
-		path := "/proc/" + pidString + "/clear_refs"
-		err = procWrite(path, []byte("4\n"))
-		if t.config.TrackReferenced && err == nil {
-			err = procWrite(path, []byte("1\n"))
-		}
-		if err != nil {
-			// This process cannot be tracked anymore, remove it.
-			t.removePid(pid)
-		}
+		t.clearPageBits(pid)
 	}
 }
 
