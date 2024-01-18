@@ -56,6 +56,17 @@ match-pid-swapout-ratio() {
     done
 }
 
+match-system-swapout() {
+    local pid=$1
+    local expected_ratio=$2
+    echo "# verifying that process $pid swapout percentage is $expected_ratio"
+    vm-command "awk '/VmSwap/{swap=\$2}/VmRSS/{rss=\$2}END{print 100*swap/(swap+rss)}' < /proc/$pid/status"
+    if ! compare-ratios "$COMMAND_OUTPUT" "$expected_ratio"; then
+        vm-command "grep Vm /proc/$pid/status"
+        error "match-system-swapout: pid $pid not swapped out"
+    fi
+}
+
 # Start meme process which has 1G of memory and reads actively 300M
 MEME_BS=1G MEME_BRC=1 MEME_BRS=50M memtierd-meme-start
 
@@ -88,6 +99,7 @@ memtierd-start
 
 sleep 5
 match-pid-swapout-ratio "${MEME_PID}" 30 5 5
+match-system-swapout "${MEME_PID}" 30
 
 memtierd-stop
 memtierd-meme-stop
@@ -125,3 +137,44 @@ match-pid-swapout-ratio "${MEME_PID}" 30 5 5
 
 memtierd-stop
 memtierd-meme-stop
+
+echo -e "\n=== scenario 3: test swapping out all memory of old and new processes in a cgroup without tracking memory accesses ===\n"
+export MEME_CGROUP=e2e-meme-swapall
+MEME_BS=100M MEME_BRC=0 MEME_BWC=0 memtierd-meme-start
+MEME1_PID=$MEME_PID
+MEMTIERD_YAML="
+policy:
+  name: ratio
+  config: |
+    intervalms: 1000
+    ratio: 1.0
+    ratiotargets: [-1]
+    pidwatcher:
+      name: cgroups
+      config: |
+        cgroups:
+          - /sys/fs/cgroup/$MEME_CGROUP
+    tracker:
+      name: finder
+      config: |
+        regionsupdatems: 500
+    mover:
+      intervalms: 20
+      bandwidth: 100
+"
+memtierd-start
+sleep 5
+match-system-swapout "${MEME1_PID}" 100
+
+echo "# launching second meme into the same cgroup"
+echo "# expect the finder tracker to report its memory"
+echo "# and the ratio policy to swap it out"
+MEME_BS=200M MEME_BRC=0 MEME_BWC=0 memtierd-meme-start
+MEME2_PID=$MEME_PID
+sleep 5
+match-system-swapout "${MEME1_PID}" 100
+match-system-swapout "${MEME2_PID}" 100
+
+memtierd-stop
+memtierd-meme-stop
+unset MEME_CGROUP
