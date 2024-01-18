@@ -169,7 +169,7 @@ memtierd-match-pagemoving() {
     round_number=0
     while ! (
         memtierd-command "stats -t move_pages -f csv | awk -F, \"{print \\\$6\\\$7}\""
-        grep "${pagemoving_regexp}" <<<"$COMMAND_OUTPUT"
+        grep -E "${pagemoving_regexp}" <<<"$COMMAND_OUTPUT"
     ); do
         echo "grep PAGEMOVING value matching ${pagemoving_regexp} not found"
         next-round round_number "${round_counter_max}" "${round_delay}" || {

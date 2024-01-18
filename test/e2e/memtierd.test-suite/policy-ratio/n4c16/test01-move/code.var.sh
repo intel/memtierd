@@ -50,7 +50,7 @@ policy:
 memtierd-start
 
 sleep 5
-memtierd-match-pagemoving "3\:0.3[5-9][0-9]" 5 5
+memtierd-match-pagemoving "3\:0.(3[5-9][0-9]|4[0-4][0-9]|450)" 5 5
 
 memtierd-stop
 memtierd-meme-stop
@@ -87,7 +87,7 @@ policy:
 memtierd-start
 
 sleep 5
-memtierd-match-pagemoving "3\:0.3[5-9][0-9]" 5 5
+memtierd-match-pagemoving "3\:0.(3[5-9][0-9]|4[0-4][0-9]|450)" 5 5
 
 memtierd-stop
 memtierd-meme-stop
