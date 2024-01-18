@@ -253,6 +253,47 @@ func (ar *AddrRanges) PagesMatching(pageAttributes uint64) (*Pages, error) {
 	return pp, nil
 }
 
+// AddrRangesMatching returns address ranges where every page has required attributes.
+func (ar *AddrRanges) AddrRangesMatching(pageAttributes uint64) (*AddrRanges, error) {
+	pmFile, err := ProcPagemapOpen(ar.pid)
+	if err != nil {
+		return nil, err
+	}
+	defer pmFile.Close()
+
+	ars := &AddrRanges{pid: ar.pid}
+
+	vaddrStart := uint64(0)
+	vaddrEnd := uint64(0)
+	log.Debugf("pageAttributes: %x", pageAttributes)
+	err = pmFile.ForEachPage(ar.Ranges(), pageAttributes,
+		func(_, pageAddr uint64) int {
+			switch {
+			case vaddrStart == 0:
+				// The first matching page found,
+				// starts the first continuous range.
+				vaddrStart = pageAddr
+			case pageAddr == vaddrEnd:
+				// Continue the continuous range.
+			case pageAddr > vaddrEnd:
+				// Start new continuous range.
+				ars.addrs = append(ars.addrs, *NewAddrRange(vaddrStart, vaddrEnd))
+				vaddrStart = pageAddr
+			}
+			vaddrEnd = pageAddr + constUPagesize
+			return 0
+		})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if vaddrStart > 0 {
+		ars.addrs = append(ars.addrs, *NewAddrRange(vaddrStart, vaddrEnd))
+	}
+	return ars, nil
+}
+
 // Intersection modifies AddrRanges by keeping only the overlapping parts with another set of address ranges.
 func (ar *AddrRanges) Intersection(intRanges []AddrRange) {
 	newAddrs := []AddrRange{}
