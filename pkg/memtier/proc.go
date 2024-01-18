@@ -413,12 +413,15 @@ func (f *ProcPagemapFile) SetReadahead(pages int) {
 //     n > 0 (skip): ForEachPage will skip reading next n pages.
 func (f *ProcPagemapFile) ForEachPage(addressRanges []AddrRange, pageAttributes uint64, handlePage func(uint64, uint64) int) error {
 	// Filter pages based on pagemap bits without calling handlePage.
-	// TODO: this is not complete!
 	pageMustBePresent := (pageAttributes&PMPresentSet == PMPresentSet)
+	pageMustNotBePresent := (pageAttributes&PMPresentCleared == PMPresentCleared)
 	pageMustBeExclusive := (pageAttributes&PMExclusiveSet == PMExclusiveSet)
+	pageMustNotBeExclusive := (pageAttributes&PMExclusiveCleared == PMExclusiveCleared)
 	pageMustBeDirty := (pageAttributes&PMDirtySet == PMDirtySet)
 	pageMustNotBeDirty := (pageAttributes&PMDirtyCleared == PMDirtyCleared)
-
+	pagemapBitCheck := pageMustBePresent || pageMustNotBePresent ||
+		pageMustBeExclusive || pageMustNotBeExclusive ||
+		pageMustBeDirty || pageMustNotBeDirty
 	for _, addressRange := range addressRanges {
 		pagemapOffset := int64(addressRange.addr / constUPagesize * 8)
 		// read /proc/pid/pagemap in the chunks of len(readBuf).
@@ -429,68 +432,100 @@ func (f *ProcPagemapFile) ForEachPage(addressRanges []AddrRange, pageAttributes 
 		readBuf := make([]byte, 16*(1+f.readahead))
 		readData := readBuf[0:0] // valid data in readBuf
 		for pageIndex := uint64(0); pageIndex < addressRange.length; pageIndex++ {
-			if len(readData) == 0 {
-				// Seek if not already in the correct position.
-				if f.pos != pagemapOffset {
-					_, err := f.osFile.Seek(pagemapOffset, io.SeekStart)
-					if err != nil {
-						// Maybe there was a race condition and the maps changed?
-						break
-					}
-					f.pos = pagemapOffset
-				}
-
-				// Read from the correct position.
-				unreadByteCount := 8 * int(addressRange.length-pageIndex)
-				fillBufUpTo := cap(readBuf)
-				if fillBufUpTo > unreadByteCount {
-					fillBufUpTo = unreadByteCount
-				}
-				nbytes, err := io.ReadAtLeast(f.osFile, readBuf, fillBufUpTo)
-				if err != nil {
-					// cannot read address range
-					continue
-				}
-				f.pos += int64(nbytes)
-				pagemapOffset += int64(nbytes)
-				readData = readBuf[:fillBufUpTo]
+			if len(readData) == 0 && f.read(&readData, &readBuf, &pagemapOffset, &addressRange, pageIndex) == 0 {
+				break
 			}
 			bytes := readData[:8]
 			readData = readData[8:]
 			pagemapBits := binary.LittleEndian.Uint64(bytes)
+			if pagemapBitCheck && !pagemapBitsSatisfied(pagemapBits,
+				pageMustBePresent, pageMustNotBePresent,
+				pageMustBeExclusive, pageMustNotBeExclusive,
+				pageMustBeDirty, pageMustNotBeDirty) {
+				continue
+			}
 
-			present := (pagemapBits&PM_PRESENT == PM_PRESENT)
-			exclusive := (pagemapBits&PM_MMAP_EXCLUSIVE == PM_MMAP_EXCLUSIVE)
-			softDirty := (pagemapBits&PM_SOFT_DIRTY == PM_SOFT_DIRTY)
-
-			if (!pageMustBePresent || present) &&
-				(!pageMustBeExclusive || exclusive) &&
-				(!pageMustBeDirty || softDirty) &&
-				(!pageMustNotBeDirty || !softDirty) {
-				n := handlePage(pagemapBits, addressRange.addr+pageIndex*constUPagesize)
-				switch {
-				case n == 0:
-					continue
-				case n == -1:
-					return nil
-				case n > 0:
-					// Skip next n pages
-					pageIndex += uint64(n)
-					pagemapOffset += int64(n * 8)
-					// Consume read buffer
-					if len(readData) < n*8 {
-						readData = readData[n*8:]
-					} else {
-						readData = readData[0:0]
-					}
-				default:
-					return fmt.Errorf("page handler callback returned invalid value: %d", n)
+			n := handlePage(pagemapBits, addressRange.addr+pageIndex*constUPagesize)
+			switch {
+			case n == 0:
+				continue
+			case n == -1:
+				return nil
+			case n > 0:
+				// Skip next n pages
+				pageIndex += uint64(n)
+				pagemapOffset += int64(n * 8)
+				// Consume read buffer
+				if len(readData) < n*8 {
+					readData = readData[n*8:]
+				} else {
+					readData = readData[0:0]
 				}
-
+			default:
+				return fmt.Errorf("page handler callback returned invalid value: %d", n)
 			}
 		}
 	}
 	return nil
+}
+
+func (f *ProcPagemapFile) read(readData *[]byte, readBuf *[]byte, pagemapOffset *int64, addressRange *AddrRange, pageIndex uint64) int {
+	if len(*readData) > 0 {
+		return 0
+	}
+	// Seek if not already in the correct position.
+	if f.pos != *pagemapOffset {
+		_, err := f.osFile.Seek(*pagemapOffset, io.SeekStart)
+		if err != nil {
+			// Maybe there was a race condition and the maps changed?
+			return 0
+		}
+		f.pos = *pagemapOffset
+	}
+
+	// Read from the correct position.
+	unreadByteCount := 8 * int(addressRange.length-pageIndex)
+	fillBufUpTo := cap(*readBuf)
+	if fillBufUpTo > unreadByteCount {
+		fillBufUpTo = unreadByteCount
+	}
+	nbytes, err := io.ReadAtLeast(f.osFile, *readBuf, fillBufUpTo)
+	if err != nil {
+		// cannot read address range
+		return 0
+	}
+	f.pos += int64(nbytes)
+	*pagemapOffset += int64(nbytes)
+	*readData = (*readBuf)[:fillBufUpTo]
+	return nbytes
+}
+
+func pagemapBitsSatisfied(pagemapBits uint64,
+	pageMustBePresent, pageMustNotBePresent,
+	pageMustBeExclusive, pageMustNotBeExclusive,
+	pageMustBeDirty, pageMustNotBeDirty bool) bool {
+	if pageMustBePresent || pageMustNotBePresent {
+		present := (pagemapBits&PM_PRESENT == PM_PRESENT)
+		if (pageMustBePresent && !present) ||
+			(pageMustNotBePresent && present) {
+			return false
+		}
+	}
+	if pageMustBeExclusive || pageMustNotBeExclusive {
+		exclusive := (pagemapBits&PM_MMAP_EXCLUSIVE == PM_MMAP_EXCLUSIVE)
+		if (pageMustBeExclusive && !exclusive) ||
+			(pageMustNotBeExclusive && exclusive) {
+			return false
+		}
+	}
+	if pageMustBeDirty || pageMustNotBeDirty {
+		softDirty := (pagemapBits&PM_SOFT_DIRTY == PM_SOFT_DIRTY)
+		if (pageMustBeDirty && !softDirty) ||
+			(pageMustNotBeDirty && softDirty) {
+			return false
+		}
+	}
+	return true
 }
 
 // procMaps returns address ranges of a process
