@@ -22,8 +22,6 @@ import (
 	"os"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/intel/memtierd/pkg/memtier"
 	_ "github.com/intel/memtierd/pkg/version"
 )
@@ -43,10 +41,19 @@ func loadConfigFile(filename string) (memtier.Policy, []memtier.Routine) {
 	if err != nil {
 		exit("%s", err)
 	}
+
 	var config config
-	err = yaml.Unmarshal(configBytes, &config)
+	err = memtier.UnmarshalYamlConfig(configBytes, &config)
 	if err != nil {
 		exit("error in %q: %s", filename, err)
+	}
+
+	if config.Policy == (memtier.PolicyConfig{}) {
+		exit("error in policy field or missing")
+	}
+
+	if config.Policy.Name == "" {
+		exit("error in policy.name filed or missing")
 	}
 
 	policy, err := memtier.NewPolicy(config.Policy.Name)

@@ -45,7 +45,7 @@ func NewTrackerMulti() (Tracker, error) {
 // SetConfigJSON sets the configuration for multiple trackers from a JSON string.
 func (t *TrackerMulti) SetConfigJSON(configJSON string) error {
 	config := &TrackerMultiConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	t.trackers = make([]Tracker, len(config.Trackers))

@@ -100,7 +100,7 @@ func NewRoutineStatActions() (Routine, error) {
 // SetConfigJSON sets the configuration for the StatActions routine from a JSON string.
 func (r *RoutineStatActions) SetConfigJSON(configJSON string) error {
 	config := &RoutineStatActionsConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	if config.IntervalMs <= 0 {

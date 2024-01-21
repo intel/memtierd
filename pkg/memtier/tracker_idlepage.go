@@ -99,7 +99,7 @@ func NewTrackerIdlePage() (Tracker, error) {
 // SetConfigJSON sets the configuration for TrackerIdlePage from a JSON string.
 func (t *TrackerIdlePage) SetConfigJSON(configJSON string) error {
 	config := &TrackerIdlePageConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	t.config = config

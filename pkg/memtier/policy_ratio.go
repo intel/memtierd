@@ -71,7 +71,7 @@ func NewPolicyRatio() (Policy, error) {
 // SetConfigJSON sets the policy configuration.
 func (p *PolicyRatio) SetConfigJSON(configJSON string) error {
 	config := &PolicyRatioConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	return p.SetConfig(config)
@@ -97,8 +97,8 @@ func (p *PolicyRatio) SetConfig(config *PolicyRatioConfig) error {
 	if len(config.Pids) > 0 {
 		return deprecatedPolicyPidsConfig("ratio")
 	}
-	if config.PidWatcher.Name == "" {
-		return fmt.Errorf("pidwatcher name missing from the ratio policy configuration")
+	if config.PidWatcher == (PidWatcherConfig{}) || config.PidWatcher.Name == "" {
+		return fmt.Errorf("error in pidwatcher field or missing from the ratio policy configuration")
 	}
 	newPidWatcher, err := NewPidWatcher(config.PidWatcher.Name)
 	if err != nil {
@@ -123,19 +123,15 @@ func (p *PolicyRatio) SetConfig(config *PolicyRatioConfig) error {
 	}
 
 	// check "Tracker" configuration for ratio policy
-	// optional field, defaults to idlepage if missing
-	if config.Tracker.Name == "" {
-		log.Debugf("tracker name missing from the ratio policy configuration, defaults to idlepage\n")
-		config.Tracker.Name = "idlepage"
+	if config.Tracker == (TrackerConfig{}) || config.Tracker.Name == "" || config.Tracker.Config == "" {
+		return fmt.Errorf("error in tracker field or missing from the ratio policy configuration")
 	}
 	newTracker, err := NewTracker(config.Tracker.Name)
 	if err != nil {
 		return err
 	}
-	if config.Tracker.Config != "" {
-		if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
-			return fmt.Errorf("configuring tracker %q for the ratio policy failed: %s", config.Tracker.Name, err)
-		}
+	if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
+		return fmt.Errorf("configuring tracker %q for the ratio policy failed: %s", config.Tracker.Name, err)
 	}
 	p.switchToTracker(newTracker)
 

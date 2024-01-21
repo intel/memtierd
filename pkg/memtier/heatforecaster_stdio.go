@@ -54,7 +54,7 @@ func NewHeatForecasterStdio() (HeatForecaster, error) {
 // SetConfigJSON sets the configuration for HeatForecasterStdio from a JSON string.
 func (hf *HeatForecasterStdio) SetConfigJSON(configJSON string) error {
 	config := &HeatForecasterStdioConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	return hf.SetConfig(config)

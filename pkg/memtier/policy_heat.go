@@ -98,7 +98,7 @@ func NewPolicyHeat() (Policy, error) {
 // SetConfigJSON sets the configuration of the heat policy using JSON input.
 func (p *PolicyHeat) SetConfigJSON(configJSON string) error {
 	config := &PolicyHeatConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	return p.SetConfig(config)
@@ -115,8 +115,8 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 	if len(config.Pids) > 0 {
 		return deprecatedPolicyPidsConfig("heat")
 	}
-	if config.PidWatcher.Name == "" {
-		return fmt.Errorf("pidwatcher name missing from the age policy configuration")
+	if config.PidWatcher == (PidWatcherConfig{}) || config.PidWatcher.Name == "" {
+		return fmt.Errorf("error in pidwatcher field or missing from the heat policy configuration")
 	}
 	newPidWatcher, err := NewPidWatcher(config.PidWatcher.Name)
 	if err != nil {
@@ -126,18 +126,17 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 		return fmt.Errorf("configuring pidwatcher %q for the age policy failed: %w", config.PidWatcher.Name, err)
 	}
 
-	if config.Tracker.Name == "" {
-		return fmt.Errorf("tracker name missing from the heat policy configuration")
+	if config.Tracker == (TrackerConfig{}) || config.Tracker.Name == "" || config.Tracker.Config == "" {
+		return fmt.Errorf("error in tracker field or missing from the heat policy configuration")
 	}
 	newTracker, err := NewTracker(config.Tracker.Name)
 	if err != nil {
 		return err
 	}
-	if config.Tracker.Config != "" {
-		if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
-			return fmt.Errorf("configuring tracker %q for the heat policy failed: %s", config.Tracker.Name, err)
-		}
+	if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
+		return fmt.Errorf("configuring tracker %q for the heat policy failed: %s", config.Tracker.Name, err)
 	}
+
 	newNumaUsed := make(map[Node]int)
 	newNumaSize := make(map[Node]int)
 	for _, numas := range config.HeatNumas {

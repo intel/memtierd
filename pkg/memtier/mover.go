@@ -108,7 +108,7 @@ func (mt *MoverTask) String() string {
 // SetConfigJSON sets the configuration of the Mover from a JSON string.
 func (m *Mover) SetConfigJSON(configJSON string) error {
 	var config MoverConfig
-	if err := unmarshal(configJSON, &config); err != nil {
+	if err := UnmarshalConfig(configJSON, &config); err != nil {
 		return err
 	}
 	return m.SetConfig(&config)

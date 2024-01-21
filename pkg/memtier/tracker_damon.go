@@ -165,7 +165,7 @@ func NewTrackerDamon() (Tracker, error) {
 func (t *TrackerDamon) SetConfigJSON(configJSON string) error {
 	config := &TrackerDamonConfig{}
 	if configJSON != "" {
-		if err := unmarshal(configJSON, config); err != nil {
+		if err := UnmarshalConfig(configJSON, config); err != nil {
 			return err
 		}
 	}

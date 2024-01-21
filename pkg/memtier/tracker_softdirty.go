@@ -102,7 +102,7 @@ func NewTrackerSoftDirty() (Tracker, error) {
 // SetConfigJSON sets the configuration for TrackerSoftDirty from a JSON string.
 func (t *TrackerSoftDirty) SetConfigJSON(configJSON string) error {
 	config := &TrackerSoftDirtyConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	t.config = config

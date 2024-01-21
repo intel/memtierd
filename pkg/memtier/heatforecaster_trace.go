@@ -45,7 +45,7 @@ func NewHeatForecasterTrace() (HeatForecaster, error) {
 // SetConfigJSON sets the configuration for the HeatForecasterTrace from a JSON string.
 func (hf *HeatForecasterTrace) SetConfigJSON(configJSON string) error {
 	config := &HeatForecasterTraceConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	return hf.SetConfig(config)

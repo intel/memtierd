@@ -64,7 +64,7 @@ func (w *PidWatcherFilter) SetConfigJSON(configJSON string) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	config := &PidWatcherFilterConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	newSource, err := NewPidWatcher(config.Source.Name)

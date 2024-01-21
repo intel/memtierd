@@ -77,7 +77,7 @@ func NewTrackerFinder() (Tracker, error) {
 // SetConfigJSON sets the configuration for TrackerFinder from a JSON string.
 func (t *TrackerFinder) SetConfigJSON(configJSON string) error {
 	config := &TrackerFinderConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	t.config = config

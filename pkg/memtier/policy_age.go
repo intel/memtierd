@@ -96,7 +96,7 @@ func NewPolicyAge() (Policy, error) {
 // SetConfigJSON sets the policy configuration based on JSON input.
 func (p *PolicyAge) SetConfigJSON(configJSON string) error {
 	config := &PolicyAgeConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	return p.SetConfig(config)
@@ -122,8 +122,8 @@ func (p *PolicyAge) SetConfig(config *PolicyAgeConfig) error {
 	if len(config.Pids) > 0 {
 		return deprecatedPolicyPidsConfig("age")
 	}
-	if config.PidWatcher.Name == "" {
-		return fmt.Errorf("pidwatcher name missing from the age policy configuration")
+	if config.PidWatcher == (PidWatcherConfig{}) || config.PidWatcher.Name == "" {
+		return fmt.Errorf("error in pidwatcher field or missing from the age policy configuration")
 	}
 	newPidWatcher, err := NewPidWatcher(config.PidWatcher.Name)
 	if err != nil {
@@ -133,17 +133,15 @@ func (p *PolicyAge) SetConfig(config *PolicyAgeConfig) error {
 		return fmt.Errorf("configuring pidwatcher %q for the age policy failed: %w", config.PidWatcher.Name, err)
 	}
 
-	if config.Tracker.Name == "" {
-		return fmt.Errorf("tracker name missing from the age policy configuration")
+	if config.Tracker == (TrackerConfig{}) || config.Tracker.Name == "" || config.Tracker.Config == "" {
+		return fmt.Errorf("error in tracker field or missing from the age policy configuration")
 	}
 	newTracker, err := NewTracker(config.Tracker.Name)
 	if err != nil {
 		return err
 	}
-	if config.Tracker.Config != "" {
-		if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
-			return fmt.Errorf("configuring tracker %q for the age policy failed: %s", config.Tracker.Name, err)
-		}
+	if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
+		return fmt.Errorf("configuring tracker %q for the age policy failed: %s", config.Tracker.Name, err)
 	}
 	if err = p.mover.SetConfig(&config.Mover); err != nil {
 		return fmt.Errorf("configuring mover failed: %s", err)

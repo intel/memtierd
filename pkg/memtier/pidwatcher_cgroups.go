@@ -59,7 +59,7 @@ func (w *PidWatcherCgroups) SetConfigJSON(configJSON string) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	config := &PidWatcherCgroupsConfig{}
-	if err := unmarshal(configJSON, config); err != nil {
+	if err := UnmarshalConfig(configJSON, config); err != nil {
 		return err
 	}
 	if config.IntervalMs == 0 {
