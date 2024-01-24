@@ -48,59 +48,48 @@ func TestUpdateCountersBoundaryCheck(t *testing.T) {
 	t.Logf(hm.Dump())
 
 	// Boundary value check: nil/non-nil
-	if hm.HeatRangeAt(4040, 0) != nil {
-		t.Errorf("nil expected when requesting heat for non-existing pid")
+	boundryTcases := []struct {
+		pid       int
+		addr      uint64
+		expectNil bool
+		message   string
+	}{
+		{4040, 0, false, "nil expected when requesting heat for non-existing pid"},
+		{2000, 99 * PS, false, "nil expected when requesting heat for address before any range"},
+		{2000, 100 * PS, true, "non-nil expected when requesting heat for the start address in the first range"},
+		{2000, 150 * PS, true, "non-nil expected when requesting heat for the start address in the second range"},
+		{2000, 199 * PS, true, "non-nil expected when requesting heat for the last address in the second range"},
+		{2000, 200 * PS, true, "non-nil expected when requesting heat for the first address in the third range"},
+		{2000, 249 * PS, true, "non-nil expected when requesting heat for the last address in the third range"},
+		{2000, 250 * PS, false, "nil expected when requesting heat for the first address in the hole"},
+		{2000, 499 * PS, false, "nil expected when requesting heat for the last address in the hole"},
+		{2000, 500 * PS, true, "non-nil expected when requesting heat for the first address after the hole"},
+		{2000, 599 * PS, true, "non-nil expected when requesting heat for the last address after the hole"},
+		{2000, 600 * PS, false, "nil expected when requesting heat after the last range"},
 	}
-	if hm.HeatRangeAt(2000, 99*PS) != nil {
-		t.Errorf("nil expected when requesting heat for address before any range")
-	}
-	if hm.HeatRangeAt(2000, 100*PS) == nil {
-		t.Errorf("non-nil expected when requesting heat for the start address in the first range")
-	}
-	if hm.HeatRangeAt(2000, 150*PS) == nil {
-		t.Errorf("non-nil expected when requesting heat for the start address in the second range")
-	}
-	if hm.HeatRangeAt(2000, 199*PS) == nil {
-		t.Errorf("non-nil expected when requesting heat for the last address in the second range")
-	}
-	if hm.HeatRangeAt(2000, 200*PS) == nil {
-		t.Errorf("non-nil expected when requesting heat for the first address in the third range")
-	}
-	if hm.HeatRangeAt(2000, 249*PS) == nil {
-		t.Errorf("non-nil expected when requesting heat for the last address in the third range")
-	}
-	if hm.HeatRangeAt(2000, 250*PS) != nil {
-		t.Errorf("nil expected when requesting heat for the first address in the hole")
-	}
-	if hm.HeatRangeAt(2000, 499*PS) != nil {
-		t.Errorf("nil expected when requesting heat for the last address in the hole")
-	}
-	if hm.HeatRangeAt(2000, 500*PS) == nil {
-		t.Errorf("non-nil expected when requesting heat for the first address after the hole")
-	}
-	if hm.HeatRangeAt(2000, 599*PS) == nil {
-		t.Errorf("non-nil expected when requesting heat for the last address after the hole")
-	}
-	if hm.HeatRangeAt(2000, 600*PS) != nil {
-		t.Errorf("nil expected when requesting heat after the last range")
+	for _, ts := range boundryTcases {
+		if (hm.HeatRangeAt(ts.pid, ts.addr) == nil) == ts.expectNil {
+			t.Errorf("%s", ts.message)
+		}
 	}
 
 	// heat on each region after first non-overlapping counters
-	hr0 := hm.HeatRangeAt(2000, 100*PS)
-	if hr0.heat != 0.0 {
-		t.Errorf("heat 0.0 expected at start address of the first range without accesses")
+	heatTcases := []struct {
+		pid          int
+		addr         uint64
+		expectedHeat float64
+		message      string
+	}{
+		{2000, 100 * PS, 0.0, "heat 0.0 expected at start address of the first range without accesses"},
+		{2000, 150 * PS, 0.0, "heat 0.0 expected at start address of the second range without accesses"},
+		{2000, 200 * PS, 0.02, "heat 0.02 expected at start address of the range with 1 access for in 50 pages"},
+		{2000, 599 * PS, 1.0, "heat 1.0 expected at the last address of the range with 100 writes in 100 pages"},
 	}
-	hr1 := hm.HeatRangeAt(2000, 150*PS)
-	if hr1.heat != 0.0 {
-		t.Errorf("heat 0.0 expected at start address of the second range without accesses")
-	}
-	hr2 := hm.HeatRangeAt(2000, 200*PS)
-	if hr2.heat != 0.02 {
-		t.Errorf("heat 0.02 expected at start address of the range with 1 access for in 50 pages")
-	}
-	hr3 := hm.HeatRangeAt(2000, 599*PS)
-	if hr3.heat != 1.0 {
-		t.Errorf("heat 1.0 expected at the last address of the range with 100 writes in 100 pages")
+	for _, ts := range heatTcases {
+		hr := hm.HeatRangeAt(ts.pid, ts.addr)
+		if hr.heat != ts.expectedHeat {
+			t.Errorf("%s", ts.message)
+		}
 	}
 
 	tcs1 := TrackerCounters{
