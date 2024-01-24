@@ -202,6 +202,12 @@ func flattenDefaultUnion(tc0, tc1 TrackerCounter) TrackerCounter {
 	}
 }
 
+func (tcs *TrackerCounters) shouldAppendCounter(flatTcs TrackerCounters, tcPid int, tcStartAddr uint64) bool {
+	return len(flatTcs) == 0 ||
+		flatTcs[len(flatTcs)-1].AR.Pid() != tcPid ||
+		flatTcs[len(flatTcs)-1].AR.Ranges()[0].EndAddr() <= tcStartAddr
+}
+
 // Flattened returns tracker counters with overlapping parts squashed.
 // Parameters:
 //
@@ -219,21 +225,19 @@ func (tcs *TrackerCounters) Flattened(cut func(tc0 TrackerCounter, ar *AddrRange
 	if union == nil {
 		union = flattenDefaultUnion
 	}
+
 	flatTcs := TrackerCounters{}
 	for _, tc := range *tcs {
 		tcStartAddr := tc.AR.Ranges()[0].Addr()
 		tcEndAddr := tc.AR.Ranges()[0].EndAddr()
 		tcPid := tc.AR.Pid()
 
-		if len(flatTcs) == 0 ||
-			flatTcs[len(flatTcs)-1].AR.Pid() != tcPid ||
-			flatTcs[len(flatTcs)-1].AR.Ranges()[0].EndAddr() <= tcStartAddr {
+		if tcs.shouldAppendCounter(flatTcs, tcPid, tcStartAddr) {
 			flatTcs = append(flatTcs, tc)
 			continue
 		}
 
-		// oltci indexes flattened TrackerCounters that
-		// overlap with tc.
+		// oltci indexes flattened TrackerCounters that overlap with tc.
 		// Walk backwards to find the first overlapping TrackerCounter.
 		oltci := len(flatTcs) - 1
 		for oltci >= 0 {
