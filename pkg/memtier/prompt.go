@@ -30,6 +30,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // Cmd represents a command with a description and a function to execute.
@@ -175,6 +176,63 @@ func (p *Prompt) RunCmdSlice(cmdSlice []string) CommandStatus {
 	return cmd.Run(cmdSlice[1:])
 }
 
+// cmdStringToSlice enables quoting parameters that contain spaces
+// with single and double quotes and escaping.
+func cmdStringToSlice(raw string) ([]string, error) {
+	var args []string
+	var currentArg string
+	var quoteStart rune
+	var quoteEnd rune
+	startEnd := map[rune]rune{
+		'"':  '"',
+		'\'': '\'',
+	}
+	escape := '\\'
+	escaped := false
+	quoted := false
+	for _, c := range raw {
+		if escaped {
+			currentArg += string(c)
+			escaped = false
+			continue
+		}
+		if c == escape {
+			escaped = true
+			continue
+		}
+		if !quoted {
+			if unicode.IsSpace(c) {
+				if currentArg != "" {
+					args = append(args, currentArg)
+				}
+				currentArg = ""
+				continue
+			}
+			if quoteEnd, quoted = startEnd[c]; quoted {
+				quoteStart = c
+				continue
+			}
+			currentArg += string(c)
+		} else {
+			if c == quoteEnd {
+				quoted = false
+				continue
+			}
+			currentArg += string(c)
+		}
+	}
+	if escaped {
+		return args, fmt.Errorf("missing escaped character")
+	}
+	if quoted {
+		return args, fmt.Errorf("unterminated quoted (%c) string", quoteStart)
+	}
+	if currentArg != "" {
+		args = append(args, currentArg)
+	}
+	return args, nil
+}
+
 // RunCmdString executes a command specified by a string.
 func (p *Prompt) RunCmdString(cmdString string) CommandStatus {
 	p.mutex.Lock()
@@ -190,8 +248,11 @@ func (p *Prompt) RunCmdString(cmdString string) CommandStatus {
 		pipeCmd = cmdString[pipeIndex+1:]
 		cmdString = cmdString[:pipeIndex]
 	}
-	// TODO: consider shlex-like splitting.
-	cmdSlice := strings.Split(strings.TrimSpace(cmdString), " ")
+	cmdSlice, err := cmdStringToSlice(strings.TrimSpace(cmdString))
+	if err != nil {
+		p.output("error in command %q: %s", cmdString, err)
+		return csError
+	}
 
 	// If there is a pipe, redirect p.output() (that is, p.w) to
 	// the pipe before calling cmd<Function>.

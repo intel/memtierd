@@ -52,9 +52,9 @@ match-pid-swapped() {
 
 mover_conf=(
     '-config-dump'
-    '-config {"IntervalMs":1000,"Bandwidth":100000}'
-    '-config {"IntervalMs":10,"Bandwidth":200}'
-    '-config {"IntervalMs":20,"Bandwidth":500}'
+    '-config "{\\"IntervalMs\\":1000,\\"Bandwidth\\":100000}"'
+    '-config "{\\"IntervalMs\\":10,\\"Bandwidth\\":200}"'
+    '-config "{\\"IntervalMs\\":20,\\"Bandwidth\\":500}"'
 )
 
 declare -A mover_seconds=(
@@ -65,9 +65,9 @@ declare -A mover_seconds=(
 )
 
 mover_swap_conf=(
-    '-config {"IntervalMs":10,"Bandwidth":5}'
-    '-config {"IntervalMs":20,"Bandwidth":10}'
-    '-config {"IntervalMs":1000,"Bandwidth":10}'
+    '-config {\\"IntervalMs\\":10,\\"Bandwidth\\":5}'
+    '-config {\\"IntervalMs\\":20,\\"Bandwidth\\":10}'
+    '-config {\\"IntervalMs\\":1000,\\"Bandwidth\\":10}'
 )
 
 declare -A mover_swap_seconds=(
@@ -139,7 +139,7 @@ vm-command "mkdir -p /sys/fs/cgroup/e2e-meme; echo ${MEME2_PID} > /sys/fs/cgroup
 
 # the 1st time swapping out with -mover option for the three meme processes.
 # Test all methods to give PIDs to swap: -pid, -pids and -pid-cgroups.
-memtierd-command "mover -config {\"IntervalMs\":10,\"Bandwidth\":10}\nswap -out -pids ${MEME0_PID} -pid ${MEME1_PID} -pid-cgroups /sys/fs/cgroup/e2e-meme -mover\nmover -wait"
+memtierd-command "mover -config \"{\\\"IntervalMs\\\":10,\\\"Bandwidth\\\":10}\"\nswap -out -pids ${MEME0_PID} -pid ${MEME1_PID} -pid-cgroups /sys/fs/cgroup/e2e-meme -mover\nmover -wait"
 
 # As mover handles the multiple pids' tasks one by one, thus, set the max_seconds four times greater and set the min_seconds as 0
 for MEME_PID in "${MEME_PIDS[@]}"; do

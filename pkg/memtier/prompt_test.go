@@ -24,6 +24,19 @@ import (
 	"time"
 )
 
+func verifyStringSlice(t *testing.T, input string, exp, obs []string) {
+	if len(exp) != len(obs) {
+		t.Errorf("input %q: slice lengths (%d vs %d) differ: expected %v, observed %v", input, len(exp), len(obs), exp, obs)
+		return
+	}
+	for i := range exp {
+		if exp[i] != obs[i] {
+			t.Errorf("input %q: exp[%d]==%q != obs[%d]==%q: expected %v, obsreved %v", input, i, exp[i], i, obs[i], exp, obs)
+			return
+		}
+	}
+}
+
 func FuzzPrompt(f *testing.F) {
 	fuzzPromptCreateEnv := os.Getenv("FUZZ_PROMPT_CREATE")
 	fuzzPromptCreate := true
@@ -107,4 +120,55 @@ func FuzzPrompt(f *testing.F) {
 		}
 
 	})
+}
+
+func TestCmdStringToSlice(t *testing.T) {
+	tcases := []struct {
+		name        string
+		input       string
+		expected    []string
+		expectedErr string
+	}{
+		{
+			name:     "empty",
+			input:    "",
+			expected: []string{},
+		},
+		{
+			name:     "double and single quotes",
+			input:    "-f \"double quotes\" -s 'single quotes'",
+			expected: []string{"-f", "double quotes", "-s", "single quotes"},
+		},
+		{
+			name:     "escaped quotes",
+			input:    "5\\' 3\\\"",
+			expected: []string{"5'", "3\""},
+		},
+		{
+			name:     "escaped quotes in quotes",
+			input:    "\"5' 3\\\"\" or '5\\' 3\"'",
+			expected: []string{"5' 3\"", "or", "5' 3\""},
+		},
+		{
+			name:        "quoted spaces and a runaway quote",
+			input:       "this\\ is\" \"fine isn\\'t' 'it but-this-isn't",
+			expected:    []string{"this is fine", "isn't it"},
+			expectedErr: "unterminated quoted (') string",
+		},
+		{
+			name:        "bad escape",
+			input:       "there is nothing worse than \\",
+			expected:    []string{"there", "is", "nothing", "worse", "than"},
+			expectedErr: "missing escaped character",
+		},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			observed, err := cmdStringToSlice(tc.input)
+			if tc.expectedErr != "" && (err == nil || err.Error() != tc.expectedErr) {
+				t.Errorf("input %q expected error %v observed %v", tc.input, tc.expectedErr, err)
+			}
+			verifyStringSlice(t, tc.input, tc.expected, observed)
+		})
+	}
 }
