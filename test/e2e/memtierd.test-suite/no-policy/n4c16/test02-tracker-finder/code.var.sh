@@ -33,7 +33,7 @@ fi
 echo -e "$PARSED_AR"
 eval "$PARSED_AR"
 
-memtierd-command "tracker -create finder -config {\"ReportAccesses\":42} -config-dump -start ${MEME_PID} -counters"
+memtierd-command "tracker -create finder -config {\\\"ReportAccesses\\\":42} -config-dump -start ${MEME_PID} -counters"
 echo -e "\n# Expect a=42 ... $startall-$endall to be found from the counters:"
 if ! grep "a=42 .*$startall-$endall" <<< "$COMMAND_OUTPUT"; then
     error "cannot find the large block with 42 accesses from counters"
@@ -42,13 +42,13 @@ fi
 echo ""
 echo "# Swap out an address range and verify that the finder finds pages that are not present"
 memtierd-command "swap -pid ${MEME_PID} -out -ranges $startmid-$endmid"
-memtierd-command "tracker -create finder -config {\"PagemapBitPresent\":false} -config-dump -start ${MEME_PID} -counters"
+memtierd-command "tracker -create finder -config {\\\"PagemapBitPresent\\\":false} -config-dump -start ${MEME_PID} -counters"
 echo -e "\n# Expect a=0 ... $startmid-$endmid to be found from the counters:"
 if ! grep "a=0 .*$startmid-$endmid" <<< "$COMMAND_OUTPUT"; then
     error "cannot find pages that should have been marked as not present"
 fi
 echo -e "\n# Expect $startall-$startmid and $endmid-$endall are found when looking for pages present in memory"
-memtierd-command "tracker -create finder -config {\"PagemapBitPresent\":true} -config-dump -start ${MEME_PID} -counters"
+memtierd-command "tracker -create finder -config {\\\"PagemapBitPresent\\\":true} -config-dump -start ${MEME_PID} -counters"
 echo -e "\n# Expect a=0 ...-$startmid and $endmid-... to be found from the counters:"
 # Note that we cannot assume that $startall-$startmid would be all present in memory
 # because (especially when THP is not used) this range may be allocated to the application
@@ -61,7 +61,7 @@ fi
 if ! grep "$endmid-" <<< "$COMMAND_OUTPUT"; then
     error "cannot find pages $endmid-..."
 fi
-memtierd-command "tracker -create finder -config {\"ReportAccesses\":2,\"PagemapBitSoftDirty\":true} -config-dump -start ${MEME_PID} -counters"
+memtierd-command "tracker -create finder -config \"{\\\"ReportAccesses\\\":2, \\\"PagemapBitSoftDirty\\\":true}\" -config-dump -start ${MEME_PID} -counters"
 echo -e "\n# Expect $startall-$endall reported even if $startmid-$endmid is not present and scanning softdirty pages"
 CHECK_RESULT=$(grep -E 'ranges=' <<< "$COMMAND_OUTPUT" | sed -e 's/.*ranges=//g' -e 's/[- ()]/ /g' | while read -r start end size remainder; do
                 if (( "0x$start" <=  "0x$startall" )) && (( "0x$end" >= "0x$endall" )); then
