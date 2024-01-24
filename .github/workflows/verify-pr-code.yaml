@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -17,3 +16,6 @@ concurrency:
 jobs:
   verify:
     uses: "./.github/workflows/common-verify-code.yaml"
+    permissions:
+        contents: read
+        security-events: write
