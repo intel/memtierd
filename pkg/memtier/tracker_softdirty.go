@@ -261,7 +261,6 @@ func (t *TrackerSoftDirty) sampler() {
 }
 
 func (t *TrackerSoftDirty) countPages() {
-	pmAttrs := PMPresentSet | PMExclusiveSet
 
 	var kpfFile *ProcKpageflagsFile
 	var err error
@@ -279,8 +278,6 @@ func (t *TrackerSoftDirty) countPages() {
 	cntPagesAccessed := uint64(0)
 	cntPagesWritten := uint64(0)
 
-	totAccessed := uint64(0)
-	totWritten := uint64(0)
 	totScanned := uint64(0)
 
 	if trackReferenced {
@@ -336,9 +333,19 @@ func (t *TrackerSoftDirty) countPages() {
 		regions[pid] = &allPidAddrRanges
 	}
 	t.regionsMutex.Unlock()
+
+	t.processPagemapForSoftDirtyRegions(regions, pagemapReadahead, maxCount, &totScanned, &cntPagesAccessed, &cntPagesWritten, pageHandler)
+}
+
+func (t *TrackerSoftDirty) processPagemapForSoftDirtyRegions(regions map[int]*[]*AddrRanges, pagemapReadahead int, maxCount uint64, totScanned *uint64,
+	cntPagesAccessed *uint64, cntPagesWritten *uint64, pageHandler func(pagemapBits uint64, pageAddr uint64) int) {
+	pmAttrs := PMPresentSet | PMExclusiveSet
+
+	totAccessed := uint64(0)
+	totWritten := uint64(0)
 	scanStartTime := time.Now().UnixNano()
 	for pid, pAllPidAddrRanges := range regions {
-		totScanned = 0
+		*totScanned = 0
 		totAccessed = 0
 		totWritten = 0
 		pmFile, err := ProcPagemapOpen(pid)
@@ -353,19 +360,19 @@ func (t *TrackerSoftDirty) countPages() {
 			pmFile.SetReadahead(0)
 		}
 		for _, addrRanges := range *pAllPidAddrRanges {
-			cntPagesAccessed = 0
-			cntPagesWritten = 0
+			*cntPagesAccessed = 0
+			*cntPagesWritten = 0
 
 			err := pmFile.ForEachPage(addrRanges.Ranges(), pmAttrs, pageHandler)
 			if err != nil {
 				t.removePid(pid)
 				break
 			}
-			if cntPagesAccessed > maxCount {
-				cntPagesAccessed = maxCount
+			if *cntPagesAccessed > maxCount {
+				*cntPagesAccessed = maxCount
 			}
-			if cntPagesWritten > maxCount {
-				cntPagesWritten = maxCount
+			if *cntPagesWritten > maxCount {
+				*cntPagesWritten = maxCount
 			}
 			t.mutex.Lock()
 			addrLenCounts, ok := t.accesses[pid]
@@ -385,11 +392,11 @@ func (t *TrackerSoftDirty) countPages() {
 				counts = &accessCounter{0, 0}
 				lenCounts[lengthPages] = counts
 			}
-			counts.a += cntPagesAccessed
-			counts.w += cntPagesWritten
+			counts.a += *cntPagesAccessed
+			counts.w += *cntPagesWritten
 			t.mutex.Unlock()
-			totAccessed += cntPagesAccessed
-			totWritten += cntPagesWritten
+			totAccessed += *cntPagesAccessed
+			totWritten += *cntPagesWritten
 			if t.raes.data != nil {
 				rae := &rawAccessEntry{
 					timestamp: scanStartTime,
@@ -397,8 +404,8 @@ func (t *TrackerSoftDirty) countPages() {
 					addr:      addr,
 					length:    lengthPages,
 					accessCounter: accessCounter{
-						a: cntPagesAccessed,
-						w: cntPagesWritten,
+						a: *cntPagesAccessed,
+						w: *cntPagesWritten,
 					},
 				}
 				t.raes.store(rae)
@@ -408,7 +415,7 @@ func (t *TrackerSoftDirty) countPages() {
 		scanEndTime := time.Now().UnixNano()
 		stats.Store(StatsPageScan{
 			pid:      pid,
-			scanned:  totScanned,
+			scanned:  *totScanned,
 			accessed: totAccessed,
 			written:  totWritten,
 			timeUs:   (scanEndTime - scanStartTime) / int64(time.Microsecond),
