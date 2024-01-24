@@ -42,6 +42,9 @@ func FuzzPrompt(f *testing.F) {
 	pagesCommonArgs := fmt.Sprintf(" -pid %d ", os.Getpid())
 	testcases := []string{
 		"help",
+		"log -i \"my info\" -d 'my debug' -e my\\ error",
+		"log --copy --prefix foo",
+		"log --capture",
 		"nop",
 		"pages -attrs Exclusive,Dirty,InHeap" + pagesCommonArgs,
 		"pages -node 0" + pagesCommonArgs,
