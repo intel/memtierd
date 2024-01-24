@@ -20,7 +20,7 @@ memtierd-setup
 # Test meme process which has 1G of memory and writes actively 300M
 # 700M+ should be moved to idlenumas and 300M should be moved to activenumas
 MEME_CGROUP=e2e-meme
-MEME_BS=1G MEME_BRC=1 MEME_BRS=300M memtierd-meme-start
+MEME_BS=1G MEME_BRC=1 MEME_BRS=300M MEME_MEMS=0 memtierd-meme-start
 sleep 2
 
 # shellcheck disable=SC2034
