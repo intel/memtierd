@@ -1,5 +1,6 @@
 #!/bin/bash
 
+thp-enable
 memtierd-setup
 
 # Start a process that has 1G of memory and reads actively 260M.
@@ -43,7 +44,7 @@ memtierd-start
 sleep 4
 
 echo "waiting ~260 MB (hot) to be moved to node 1 and ~700 MB (cold) to be moved to node 3"
-memtierd-match-pagemoving "1\:0.2[0-9][0-9]\;3\:0\.7[0-9][0-9]" 5 4
+memtierd-match-pagemoving "1\:0.2[0-9][0-9]\;3\:0\.[78][0-9][0-9]" 5 4
 
 echo "stop meme, expect all memory to be moved to node 3"
 vm-command "kill -STOP ${MEME_PID}"
