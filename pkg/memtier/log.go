@@ -32,10 +32,9 @@ type logger struct {
 	*stdlog.Logger
 }
 
-const logPrefix = "memtier "
-
 var log Logger = &logger{Logger: nil}
 var logDebugMessages bool = false
+var logPrefix string
 
 // SetLogger sets a custom logger for the package.
 func SetLogger(l *stdlog.Logger) {
@@ -47,9 +46,19 @@ func SetLogDebug(debug bool) {
 	logDebugMessages = debug
 }
 
+// SetLogPrefix sets prefix on log messages.
+func SetLogPrefix(prefix string) {
+	logPrefix = prefix
+}
+
 // NewLoggerWrapper creates a new Logger instance that wraps the provided standard logger.
 func NewLoggerWrapper(l *stdlog.Logger) Logger {
 	return &logger{Logger: l}
+}
+
+// Log returns current logger.
+func Log() Logger {
+	return log
 }
 
 // Debugf logs a debug message if debug logging is enabled.
