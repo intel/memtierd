@@ -41,7 +41,7 @@ type Cmd struct {
 // Prompt represents an interactive prompt with associated functionality.
 type Prompt struct {
 	r            *bufio.Reader
-	w            *bufio.Writer
+	w            bufWriter
 	f            *flag.FlagSet
 	pidwatcher   PidWatcher
 	mover        *Mover
@@ -94,6 +94,7 @@ func NewPrompt(ps1 string, reader *bufio.Reader, writer *bufio.Writer) *Prompt {
 		"routines":   {"manage routines.", p.cmdRoutines},
 		"time":       {"print timestamps or elapsed time.", p.cmdTime},
 		"help":       {"print help.", p.cmdHelp},
+		"log":        {"log a message or all output", p.cmdLog},
 		"nop":        {"no operation.", p.cmdNop},
 	}
 	return &p
@@ -107,6 +108,51 @@ func (p *Prompt) output(format string, a ...interface{}) {
 	}
 	_, _ = p.w.WriteString(fmt.Sprintf(format, a...))
 	p.w.Flush()
+}
+
+// bufWriter interface is a small subset of bufio.Writer
+// that implements io.Writer, too.
+type bufWriter interface {
+	Write(p []byte) (nn int, err error)
+	WriteString(s string) (int, error)
+	Flush() error
+}
+
+// logWriter implements bufWriter used by prompt.output(). It copies
+// or, alternatively, captures everything that is output() into the
+// log, too.
+type logWriter struct {
+	prefix  string
+	orig    bufWriter
+	logCopy bool
+}
+
+// Write writes bytes into the log, and optionally copies it to
+// the original output, too.
+func (lw *logWriter) Write(p []byte) (int, error) {
+	log.Infof("%s%s", lw.prefix, string(p))
+	if lw.logCopy {
+		return lw.orig.Write(p)
+	}
+	return len(p), nil
+}
+
+// WriteString writes a string into the log, and optionally copies it
+// to the original output, too.
+func (lw *logWriter) WriteString(s string) (int, error) {
+	log.Infof("%s%s", lw.prefix, s)
+	if lw.logCopy {
+		return lw.orig.WriteString(s)
+	}
+	return len(s), nil
+}
+
+// Flush forwards the operation to the original output.
+func (lw *logWriter) Flush() error {
+	if lw.logCopy {
+		return lw.orig.Flush()
+	}
+	return nil
 }
 
 // RunCmdSlice executes a command specified by a slice of strings.
@@ -244,6 +290,54 @@ func sortedNodeKeys(m map[Node]uint) []Node {
 }
 
 func (p *Prompt) cmdNop(args []string) CommandStatus {
+	return csOk
+}
+
+func (p *Prompt) cmdLog(args []string) CommandStatus {
+	optInfo := p.f.String("i", "", "-i MSG log an info message")
+	optDebug := p.f.String("d", "", "-d MSG log a debug message")
+	optError := p.f.String("e", "", "-e MSG log an error message")
+	optFatal := p.f.String("f", "", "-f MSG log a fatal error message and exit")
+	optCopy := p.f.Bool("copy", false, "copy all prompt output to log")
+	optCapture := p.f.Bool("capture", false, "redirect all prompt output to log")
+	optPrefix := p.f.String("prefix", "<undefined>", "add PREFIX to prompt output written to log")
+	if err := p.f.Parse(args); err != nil {
+		return csOk
+	}
+	if *optInfo != "" {
+		log.Infof(*optInfo)
+	}
+	if *optDebug != "" {
+		log.Debugf(*optDebug)
+	}
+	if *optError != "" {
+		log.Errorf(*optError)
+	}
+	if *optFatal != "" {
+		log.Fatalf(*optFatal)
+	}
+	if *optCopy || *optCapture {
+		p.outputMutex.Lock()
+		if lw, ok := p.w.(*logWriter); ok {
+			lw.logCopy = *optCopy
+		} else {
+			p.w = &logWriter{
+				logCopy: *optCopy,
+				orig:    p.w,
+			}
+		}
+		p.outputMutex.Unlock()
+	}
+	if *optPrefix != "<undefined>" {
+		p.outputMutex.Lock()
+		if lw, ok := p.w.(*logWriter); ok {
+			lw.prefix = *optPrefix
+			p.outputMutex.Unlock()
+		} else {
+			p.outputMutex.Unlock()
+			p.output("cannot set prefix, output is not copied or captured into log\n")
+		}
+	}
 	return csOk
 }
 
