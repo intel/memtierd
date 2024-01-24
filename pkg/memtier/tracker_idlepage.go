@@ -258,8 +258,6 @@ func (t *TrackerIdlePage) countPages() {
 		maxCount = t.config.PagesInRegion
 	}
 	cntPagesAccessed := uint64(0)
-
-	totAccessed := uint64(0)
 	totScanned := uint64(0)
 
 	kpfFile, err := ProcKpageflagsOpen()
@@ -287,8 +285,8 @@ func (t *TrackerIdlePage) countPages() {
 	}
 
 	// pageHandler is called for all matching pages in the pagemap.
-	// It counts number of pages accessed and written in a region.
-	// The result is stored to cntPagesAccessed and cntPagesWritten.
+	// It counts number of pages accessed in a region.
+	// The result is stored to cntPagesAccessed.
 	pageHandler := func(pagemapBits uint64, pageAddr uint64) int {
 		totScanned++
 		pfn := pagemapBits & PM_PFN
@@ -315,11 +313,13 @@ func (t *TrackerIdlePage) countPages() {
 		}
 		return 0
 	}
+	t.scanAndProcessPageRegions(pageHandler, maxCount, &totScanned, &cntPagesAccessed)
+}
 
+func (t *TrackerIdlePage) scanAndProcessPageRegions(pageHandler func(pagemapBits uint64, pageAddr uint64) int, maxCount uint64, totScanned *uint64, cntPagesAccessed *uint64) {
 	scanStartTime := time.Now().UnixNano()
 	for pid, allPidAddrRanges := range t.regions {
-		totScanned = 0
-		totAccessed = 0
+		totAccessed := uint64(0)
 		pmFile, err := ProcPagemapOpen(pid)
 		if err != nil {
 			t.removePid(pid)
@@ -332,15 +332,14 @@ func (t *TrackerIdlePage) countPages() {
 			pmFile.SetReadahead(0)
 		}
 		for _, addrRanges := range allPidAddrRanges {
-			cntPagesAccessed = 0
-
+			*cntPagesAccessed = 0
 			err := pmFile.ForEachPage(addrRanges.Ranges(), t.pmAttrs, pageHandler)
 			if err != nil {
 				t.removePid(pid)
 				break
 			}
-			if cntPagesAccessed > maxCount {
-				cntPagesAccessed = maxCount
+			if *cntPagesAccessed > maxCount {
+				*cntPagesAccessed = maxCount
 			}
 			addrLenCounts, ok := t.accesses[pid]
 			if !ok {
@@ -359,8 +358,8 @@ func (t *TrackerIdlePage) countPages() {
 				counts = &accessCounter{0, 0}
 				lenCounts[lengthPages] = counts
 			}
-			counts.a += cntPagesAccessed
-			totAccessed += cntPagesAccessed
+			counts.a += *cntPagesAccessed
+			totAccessed += *cntPagesAccessed
 			if t.raes.data != nil {
 				rae := &rawAccessEntry{
 					timestamp: scanStartTime,
@@ -368,7 +367,7 @@ func (t *TrackerIdlePage) countPages() {
 					addr:      addr,
 					length:    lengthPages,
 					accessCounter: accessCounter{
-						a: cntPagesAccessed,
+						a: *cntPagesAccessed,
 					},
 				}
 				t.raes.store(rae)
@@ -378,7 +377,7 @@ func (t *TrackerIdlePage) countPages() {
 		scanEndTime := time.Now().UnixNano()
 		stats.Store(StatsPageScan{
 			pid:      pid,
-			scanned:  totScanned,
+			scanned:  *totScanned,
 			accessed: totAccessed,
 			written:  0,
 			timeUs:   (scanEndTime - scanStartTime) / int64(time.Microsecond),
