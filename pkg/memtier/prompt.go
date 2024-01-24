@@ -203,6 +203,11 @@ func (p *Prompt) SetEcho(newEcho bool) {
 	p.echo = newEcho
 }
 
+// SetInput changes the reader from which interactive prompt reads input.
+func (p *Prompt) SetInput(reader *bufio.Reader) {
+	p.r = reader
+}
+
 // SetPolicy sets the policy for the prompt.
 func (p *Prompt) SetPolicy(policy Policy) {
 	p.policy = policy

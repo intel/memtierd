@@ -76,10 +76,10 @@ memtierd-start() {
         vm-command "echo 0-3 > /sys/fs/cgroup/$MEME_CGROUP/cpuset.mems"
     fi
     if [ -z "${MEMTIERD_YAML}" ]; then
-        MEMTIERD_OPTS="-prompt -debug"
+        MEMTIERD_OPTS="-prompt -debug -echo"
     else
         vm-pipe-to-file "memtierd.yaml" <<<"${MEMTIERD_YAML}"
-        MEMTIERD_OPTS="-config memtierd.yaml -debug"
+        MEMTIERD_OPTS="-config memtierd.yaml -prompt -debug -echo"
     fi
     vm-command "nohup sh -c 'socat tcp4-listen:${MEMTIERD_PORT},fork,reuseaddr - | memtierd ${MEMTIERD_OPTS}' > ${MEMTIERD_OUTPUT} 2>&1 & sleep 2; cat ${MEMTIERD_OUTPUT}"
     vm-command "pgrep memtierd" || {
