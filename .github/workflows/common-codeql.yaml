@@ -4,11 +4,12 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   codeql-scan:
     runs-on: ubuntu-22.04
+    permissions:
+        security-events: write
 
     steps:
     - name: Checkout

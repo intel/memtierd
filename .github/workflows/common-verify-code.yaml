@@ -5,7 +5,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   build-and-test:
@@ -71,8 +70,14 @@ jobs:
 
   codeql-scan:
     uses: "./.github/workflows/common-codeql.yaml"
+    permissions:
+        contents: read
+        security-events: write
 
   trivy-scan:
     uses: "./.github/workflows/common-trivy.yaml"
+    permissions:
+        contents: read
+        security-events: write
     with:
       upload-to-github-security-tab: true
