@@ -500,30 +500,30 @@ func (f *ProcPagemapFile) read(readData *[]byte, readBuf *[]byte, pagemapOffset 
 	return nbytes
 }
 
+func pagemapBitSatisfied(pagemapBits uint64, bit uint64, mustBeTrue, mustBeFalse bool) bool {
+	if mustBeTrue || mustBeFalse {
+		flag := (pagemapBits&bit == bit)
+		if (mustBeTrue && !flag) ||
+			(mustBeFalse && flag) {
+			return false
+		}
+	}
+	return true
+}
+
 func pagemapBitsSatisfied(pagemapBits uint64,
 	pageMustBePresent, pageMustNotBePresent,
 	pageMustBeExclusive, pageMustNotBeExclusive,
 	pageMustBeDirty, pageMustNotBeDirty bool) bool {
-	if pageMustBePresent || pageMustNotBePresent {
-		present := (pagemapBits&PM_PRESENT == PM_PRESENT)
-		if (pageMustBePresent && !present) ||
-			(pageMustNotBePresent && present) {
-			return false
-		}
+
+	if !pagemapBitSatisfied(pagemapBits, PM_PRESENT, pageMustBePresent, pageMustNotBePresent) {
+		return false
 	}
-	if pageMustBeExclusive || pageMustNotBeExclusive {
-		exclusive := (pagemapBits&PM_MMAP_EXCLUSIVE == PM_MMAP_EXCLUSIVE)
-		if (pageMustBeExclusive && !exclusive) ||
-			(pageMustNotBeExclusive && exclusive) {
-			return false
-		}
+	if !pagemapBitSatisfied(pagemapBits, PM_MMAP_EXCLUSIVE, pageMustBeExclusive, pageMustNotBeExclusive) {
+		return false
 	}
-	if pageMustBeDirty || pageMustNotBeDirty {
-		softDirty := (pagemapBits&PM_SOFT_DIRTY == PM_SOFT_DIRTY)
-		if (pageMustBeDirty && !softDirty) ||
-			(pageMustNotBeDirty && softDirty) {
-			return false
-		}
+	if !pagemapBitSatisfied(pagemapBits, PM_SOFT_DIRTY, pageMustBeDirty, pageMustNotBeDirty) {
+		return false
 	}
 	return true
 }
