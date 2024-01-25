@@ -104,8 +104,38 @@ func (p *PolicyHeat) SetConfigJSON(configJSON string) error {
 	return p.SetConfig(config)
 }
 
-// SetConfig sets the configuration of the heat policy.
-func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
+func (p *PolicyHeat) setConfigPidWatcher(config *PolicyHeatConfig) (PidWatcher, error) {
+	if config.PidWatcher.Name == "" {
+		return nil, fmt.Errorf("pidwatcher name missing from the age policy configuration")
+	}
+	newPidWatcher, err := NewPidWatcher(config.PidWatcher.Name)
+	if err != nil {
+		return nil, err
+	}
+	if err = newPidWatcher.SetConfigJSON(config.PidWatcher.Config); err != nil {
+		return nil, fmt.Errorf("configuring pidwatcher %q for the age policy failed: %w", config.PidWatcher.Name, err)
+	}
+
+	return newPidWatcher, nil
+}
+
+func (p *PolicyHeat) setConfigTracker(config *PolicyHeatConfig) (Tracker, error) {
+	if config.Tracker.Name == "" {
+		return nil, fmt.Errorf("tracker name missing from the heat policy configuration")
+	}
+	newTracker, err := NewTracker(config.Tracker.Name)
+	if err != nil {
+		return nil, err
+	}
+	if config.Tracker.Config != "" {
+		if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
+			return nil, fmt.Errorf("configuring tracker %q for the heat policy failed: %s", config.Tracker.Name, err)
+		}
+	}
+	return newTracker, nil
+}
+
+func (p *PolicyHeat) checkConfig(config *PolicyHeatConfig) error {
 	if config.IntervalMs <= 0 {
 		return fmt.Errorf("invalid heat policy IntervalMs: %d, > 0 expected", config.IntervalMs)
 	}
@@ -115,29 +145,25 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 	if len(config.Pids) > 0 {
 		return deprecatedPolicyPidsConfig("heat")
 	}
-	if config.PidWatcher.Name == "" {
-		return fmt.Errorf("pidwatcher name missing from the age policy configuration")
-	}
-	newPidWatcher, err := NewPidWatcher(config.PidWatcher.Name)
-	if err != nil {
+	return nil
+}
+
+// SetConfig sets the configuration of the heat policy.
+func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
+	if err := p.checkConfig(config); err != nil {
 		return err
-	}
-	if err = newPidWatcher.SetConfigJSON(config.PidWatcher.Config); err != nil {
-		return fmt.Errorf("configuring pidwatcher %q for the age policy failed: %w", config.PidWatcher.Name, err)
 	}
 
-	if config.Tracker.Name == "" {
-		return fmt.Errorf("tracker name missing from the heat policy configuration")
-	}
-	newTracker, err := NewTracker(config.Tracker.Name)
+	newPidWatcher, err := p.setConfigPidWatcher(config)
 	if err != nil {
 		return err
 	}
-	if config.Tracker.Config != "" {
-		if err = newTracker.SetConfigJSON(config.Tracker.Config); err != nil {
-			return fmt.Errorf("configuring tracker %q for the heat policy failed: %s", config.Tracker.Name, err)
-		}
+
+	newTracker, err := p.setConfigTracker(config)
+	if err != nil {
+		return err
 	}
+
 	newNumaUsed := make(map[Node]int)
 	newNumaSize := make(map[Node]int)
 	for _, numas := range config.HeatNumas {
@@ -153,8 +179,7 @@ func (p *PolicyHeat) SetConfig(config *PolicyHeatConfig) error {
 		}
 		newNumaSize[node] = int(sizeBytes / constPagesize)
 	}
-	err = p.heatmap.SetConfig(&config.Heatmap)
-	if err != nil {
+	if err = p.heatmap.SetConfig(&config.Heatmap); err != nil {
 		return fmt.Errorf("heatmap configuration error: %s", err)
 	}
 	if err = p.mover.SetConfig(&config.Mover); err != nil {
@@ -233,88 +258,96 @@ func (p *PolicyHeat) Dump(args []string) string {
 		return strings.Join(lines, "\n")
 	}
 	if args[0] == "heatgram" {
-		classCount := p.heatmap.config.HeatClasses
-		var err error
-		if len(args) > 1 {
-			if classCount, err = strconv.Atoi(args[1]); err != nil || classCount < 1 {
-				return "invalid argument, expected CLASSES > 0, syntax: heatgram CLASSES"
-			}
-		}
-		lines := []string{}
-		// Find the following properties of the heatmap:
-		hrCount := 0            // number of heatranges
-		pageCount := uint64(0)  // total number of pages in the heatmap (all pids)
-		maxHeat := float64(0.0) // maximum heat that appears in the heatmap
-		pidMaxHeat := map[int]float64{}
-		lines = append(lines, "", "table: maximum heat in heatmaps")
-		lines = append(lines, "     pid  maxHeat")
-		for _, pid := range sortInts(p.heatmap.Pids()) {
-			p.heatmap.ForEachRange(pid, func(hr *HeatRange) int {
-				if hr.heat > maxHeat {
-					maxHeat = hr.heat
-				}
-				if hr.heat > pidMaxHeat[pid] {
-					pidMaxHeat[pid] = hr.heat
-				}
-				hrCount++
-				pageCount += hr.length
-				return 0
-			})
-			lines = append(lines, fmt.Sprintf("%8d %8.4f", pid, pidMaxHeat[pid]))
-		}
-		// Build statistics on each pid and class separately.
-		lines = append(lines, "", "table: memory in heat classes")
-		for _, pid := range sortInts(p.heatmap.Pids()) {
-			classPages := map[int]uint64{} // pages per class in this pid
-			totPages := uint64(0)          // total pages in this pid
-			p.heatmap.ForEachRange(pid, func(hr *HeatRange) int {
-				hrClass := int(float64(classCount) * hr.heat / p.heatmap.config.HeatMax)
-				if hrClass >= classCount {
-					hrClass--
-				}
-				classPages[hrClass] += hr.length
-				totPages += hr.length
-				return 0
-			})
-			lines = append(lines, "     pid class pidmem[%] totmem[%]    mem[G]")
-			for classNum := 0; classNum < classCount; classNum++ {
-				lines = append(lines, fmt.Sprintf("%8d %5d %9.2f %9.2f %9.3f",
-					pid,
-					classNum,
-					float32(100*classPages[classNum])/float32(totPages),
-					float32(100*classPages[classNum])/float32(pageCount),
-					float32(classPages[classNum]*constUPagesize)/float32(1024*1024*1024)))
-			}
-		}
-		return strings.Join(lines, "\n")
+		return p.dumpHeatgram(args)
 	}
 	if args[0] == "numa" {
-		lines := []string{}
-		lines = append(lines, "node      pid pageData numaUsed numaSize")
-		for _, pid := range sortInts(p.heatmap.Pids()) {
-			nodeUsed := mapNodeUint64{}
-			addrDatas := p.pidAddrDatas[pid]
-			if addrDatas == nil {
-				continue
-			}
-			addrDatas.ForEach(func(ar *AddrRange, data interface{}) int {
-				arpi := data.(pageInfo)
-				nodeUsed[arpi.node] += ar.length * constUPagesize
-				return 0
-			})
-			for _, node := range nodeUsed.sortedKeys() {
-				used := nodeUsed[node]
-				lines = append(lines, fmt.Sprintf("%4d %8d %7dM %7dM %7dM",
-					node,
-					pid,
-					used/(1024*1024),
-					int64(p.numaUsed[node])*constPagesize/(1024*1024),
-					int64(p.numaSize[node])*constPagesize/(1024*1024)))
-			}
-		}
-		return strings.Join(lines, "\n")
+		return p.dumpNumaInfo(args)
 	}
 	return dumpHelp
+}
+
+func (p *PolicyHeat) dumpHeatgram(args []string) string {
+	classCount := p.heatmap.config.HeatClasses
+	var err error
+	if len(args) > 1 {
+		if classCount, err = strconv.Atoi(args[1]); err != nil || classCount < 1 {
+			return "invalid argument, expected CLASSES > 0, syntax: heatgram CLASSES"
+		}
+	}
+	lines := []string{}
+	// Find the following properties of the heatmap:
+	hrCount := 0            // number of heatranges
+	pageCount := uint64(0)  // total number of pages in the heatmap (all pids)
+	maxHeat := float64(0.0) // maximum heat that appears in the heatmap
+	pidMaxHeat := map[int]float64{}
+	lines = append(lines, "", "table: maximum heat in heatmaps")
+	lines = append(lines, "     pid  maxHeat")
+	for _, pid := range sortInts(p.heatmap.Pids()) {
+		p.heatmap.ForEachRange(pid, func(hr *HeatRange) int {
+			if hr.heat > maxHeat {
+				maxHeat = hr.heat
+			}
+			if hr.heat > pidMaxHeat[pid] {
+				pidMaxHeat[pid] = hr.heat
+			}
+			hrCount++
+			pageCount += hr.length
+			return 0
+		})
+		lines = append(lines, fmt.Sprintf("%8d %8.4f", pid, pidMaxHeat[pid]))
+	}
+	// Build statistics on each pid and class separately.
+	lines = append(lines, "", "table: memory in heat classes")
+	for _, pid := range sortInts(p.heatmap.Pids()) {
+		classPages := map[int]uint64{} // pages per class in this pid
+		totPages := uint64(0)          // total pages in this pid
+		p.heatmap.ForEachRange(pid, func(hr *HeatRange) int {
+			hrClass := int(float64(classCount) * hr.heat / p.heatmap.config.HeatMax)
+			if hrClass >= classCount {
+				hrClass--
+			}
+			classPages[hrClass] += hr.length
+			totPages += hr.length
+			return 0
+		})
+		lines = append(lines, "     pid class pidmem[%] totmem[%]    mem[G]")
+		for classNum := 0; classNum < classCount; classNum++ {
+			lines = append(lines, fmt.Sprintf("%8d %5d %9.2f %9.2f %9.3f",
+				pid,
+				classNum,
+				float32(100*classPages[classNum])/float32(totPages),
+				float32(100*classPages[classNum])/float32(pageCount),
+				float32(classPages[classNum]*constUPagesize)/float32(1024*1024*1024)))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (p *PolicyHeat) dumpNumaInfo(args []string) string {
+	lines := []string{}
+	lines = append(lines, "node      pid pageData numaUsed numaSize")
+	for _, pid := range sortInts(p.heatmap.Pids()) {
+		nodeUsed := mapNodeUint64{}
+		addrDatas := p.pidAddrDatas[pid]
+		if addrDatas == nil {
+			continue
+		}
+		addrDatas.ForEach(func(ar *AddrRange, data interface{}) int {
+			arpi := data.(pageInfo)
+			nodeUsed[arpi.node] += ar.length * constUPagesize
+			return 0
+		})
+		for _, node := range nodeUsed.sortedKeys() {
+			used := nodeUsed[node]
+			lines = append(lines, fmt.Sprintf("%4d %8d %7dM %7dM %7dM",
+				node,
+				pid,
+				used/(1024*1024),
+				int64(p.numaUsed[node])*constPagesize/(1024*1024),
+				int64(p.numaSize[node])*constPagesize/(1024*1024)))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Stop stops the policy and associated components.
@@ -461,19 +494,99 @@ func (p *PolicyHeat) startMoves(timestamp int64) {
 	}
 }
 
+func (p *PolicyHeat) getSortedHeatRanges(pid int) []*HeatRange {
+	return p.heatmap.Sorted(pid, func(hr0, hr1 *HeatRange) bool {
+		return hr0.heat > hr1.heat || (hr0.heat == hr1.heat && hr0.addr < hr1.addr)
+	})
+}
+
+func (p *PolicyHeat) walkNumaNodes(addrDatas *AddrDatas, hr *HeatRange) (Node, bool) {
+	currNode := NodeUndefined
+	pagesOnUnknownNode := false
+	if addrData, ok := addrDatas.Data(hr.addr); ok {
+		addrInfo, _ := addrData.(pageInfo)
+		currNode = addrInfo.node
+	}
+	if currNode == NodeUndefined {
+		pagesOnUnknownNode = true
+	}
+	return currNode, pagesOnUnknownNode
+
+}
+
+func (p *PolicyHeat) getPagesOnUnknownNode(pid int, hr *HeatRange, addrDatas *AddrDatas) (bool, *Pages, *Node) {
+	// We do not know where these pages
+	// are. Let's figure it out.
+
+	var ppages *Pages
+	ppages, err := NewAddrRanges(pid, hr.AddrRange()).PagesMatching(PMPresentSet | PMExclusiveSet)
+	if err != nil {
+		return true, ppages, nil
+	}
+	firstPageAddress := uint64(0)
+	prevPageAddress := uint64(0)
+	prevPageNode := NodeUndefined
+	node := prevPageNode
+	nodeInts, err := ppages.status()
+	if err != nil {
+		return true, ppages, nil
+	}
+	for pageIndex, nodeInt := range nodeInts {
+		node = Node(nodeInt)
+		pageAddress := ppages.pages[pageIndex].Addr()
+		if prevPageAddress+constUPagesize != pageAddress || prevPageNode != node {
+			// previous page was the last one in a contiguous sequence of pages on a node
+			if firstPageAddress != 0 {
+				addrDatas.SetData(*NewAddrRange(firstPageAddress, prevPageAddress+constUPagesize), pageInfo{node: prevPageNode})
+				p.numaUsed[node] += int((prevPageAddress + constUPagesize - firstPageAddress) / constUPagesize)
+			}
+			firstPageAddress = pageAddress
+			prevPageNode = node
+		}
+		prevPageAddress = pageAddress
+	}
+	if firstPageAddress > 0 {
+		addrDatas.SetData(*NewAddrRange(firstPageAddress, prevPageAddress+constUPagesize), pageInfo{node: Node(prevPageNode)})
+		p.numaUsed[node] += int((prevPageAddress + constUPagesize - firstPageAddress) / constUPagesize)
+	}
+	return false, ppages, &node
+}
+
+func (p *PolicyHeat) calculateNodeFreeSpace(node Node, hr *HeatRange) int {
+	candFree := 0
+	if p.numaSize[node] != constNumaSizeUnlimited {
+		candFree = p.numaSize[node] - p.numaUsed[node] - int(hr.length)
+	}
+	return candFree
+}
+
+func (p *PolicyHeat) findDestNodeAndFreeSpace(hr *HeatRange, numas []int) (Node, int) {
+	destNode := NodeUndefined
+	destFree := -1
+
+	for _, candNodeInt := range numas {
+		candNode := Node(candNodeInt)
+		candFree := p.calculateNodeFreeSpace(candNode, hr)
+		if candFree > destFree {
+			destNode = candNode
+			destFree = candFree
+		}
+	}
+
+	return destNode, destFree
+}
+
+func (p *PolicyHeat) shouldSkipDestination(destNode Node, destFree int, hr *HeatRange, numaSize map[Node]int) bool {
+	// Failed to find proper destination node or find a destination node with enough quota.
+	return destNode == NodeUndefined || (numaSize[destNode] != constNumaSizeUnlimited && destFree < int(hr.length))
+}
+
 // startMovesFillFastFree initiates memory moves for cases without specified limits.
 func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 	moverTasks := 0
 	for _, pid := range p.heatmap.Pids() {
-		hrHotToCold := p.heatmap.Sorted(pid, func(hr0, hr1 *HeatRange) bool {
-			if hr0.heat > hr1.heat ||
-				(hr0.heat == hr1.heat && hr0.addr < hr1.addr) {
-				return true
-			}
-			return false
-		})
+		hrHotToCold := p.getSortedHeatRanges(pid)
 		for _, hr := range hrHotToCold {
-			currNode := NodeUndefined
 			heatClass := p.heatmap.HeatClass(hr)
 			numas, ok := p.config.HeatNumas[heatClass]
 			if !ok || len(numas) == 0 {
@@ -490,54 +603,20 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 			// Now using just only the start address of a
 			// heatrange, which can be used as a fast path
 			// for stable ranges.
-			pagesOnUnknownNode := false
-			if addrData, ok := addrDatas.Data(hr.addr); ok {
-				addrInfo, _ := addrData.(pageInfo)
-				currNode = addrInfo.node
-			}
-			if currNode == NodeUndefined {
-				pagesOnUnknownNode = true
-			}
-			var ppages *Pages = nil
+			currNode, pagesOnUnknownNode := p.walkNumaNodes(addrDatas, hr)
+
+			var ppages *Pages
+			ppages = nil
 			var err error
 			if pagesOnUnknownNode {
-				// We do not know where these pages
-				// are. Let's figure it out.
-				ppages, err = NewAddrRanges(pid, hr.AddrRange()).PagesMatching(PMPresentSet | PMExclusiveSet)
-				if err != nil {
+
+				shouldStop, curPages, curNode := p.getPagesOnUnknownNode(pid, hr, addrDatas)
+				ppages = curPages
+				if shouldStop {
 					continue
 				}
-				firstPageAddress := uint64(0)
-				prevPageAddress := uint64(0)
-				prevPageNode := NodeUndefined
-				node := prevPageNode
-				nodeInts, err := ppages.status()
-				if err != nil {
-					continue
-				}
-				for pageIndex, nodeInt := range nodeInts {
-					node = Node(nodeInt)
-					pageAddress := ppages.pages[pageIndex].Addr()
-					if prevPageAddress+constUPagesize != pageAddress || prevPageNode != node {
-						// previous page was
-						// the last one in a
-						// contiguous sequence
-						// of pages on a node
-						if firstPageAddress != 0 {
-							addrDatas.SetData(*NewAddrRange(firstPageAddress, prevPageAddress+constUPagesize), pageInfo{node: prevPageNode})
-							p.numaUsed[node] += int((prevPageAddress + constUPagesize - firstPageAddress) / constUPagesize)
-						}
-						firstPageAddress = pageAddress
-						prevPageNode = node
-					}
-					prevPageAddress = pageAddress
-				}
-				if firstPageAddress > 0 {
-					addrDatas.SetData(*NewAddrRange(firstPageAddress, prevPageAddress+constUPagesize), pageInfo{node: Node(prevPageNode)})
-					p.numaUsed[node] += int((prevPageAddress + constUPagesize - firstPageAddress) / constUPagesize)
-					// log.Debugf("found last %d pages at %x on node %d\n", (prevPageAddress+constUPagesize-firstPageAddress)/constUPagesize, firstPageAddress, prevPageNode)
-				}
-				currNode = node
+				currNode = *curNode
+
 			}
 			if sliceContainsInt(numas, int(currNode)) {
 				// Already on a good node, do nothing.
@@ -547,30 +626,10 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 				// Failed to find out where the pages are.
 				continue
 			}
-			// We know pages are on a wrong node. Choose
-			// new node with largest free space for the
+			// We know pages are on a wrong node. Choose new node with largest free space for the
 			// pages. TODO: filter mems_allowed from numas
-			destNode := NodeUndefined
-			destFree := -1
-			for _, candNodeInt := range numas {
-				candNode := Node(candNodeInt)
-				candFree := 0
-				if p.numaSize[candNode] != constNumaSizeUnlimited {
-					candFree = p.numaSize[candNode] - p.numaUsed[candNode] - int(hr.length)
-				}
-				if candFree > destFree {
-					destNode = candNode
-					destFree = candFree
-				}
-			}
-			if destNode == NodeUndefined {
-				// Failed to find proper destination node.
-				continue
-			}
-			// Is there enough free space for pages of
-			// this heat range?
-			if p.numaSize[destNode] != constNumaSizeUnlimited && destFree < int(hr.length) {
-				// Failed to find a destination node with enough quota.
+			destNode, destFree := p.findDestNodeAndFreeSpace(hr, numas)
+			if p.shouldSkipDestination(destNode, destFree, hr, p.numaSize) {
 				continue
 			}
 			if ppages == nil {
@@ -589,8 +648,7 @@ func (p *PolicyHeat) startMovesFillFastFree(timestamp int64) {
 			p.mover.AddTask(task)
 			addrDatas.SetData(hr.AddrRange(), pageInfo{node: destNode})
 			p.numaUsed[destNode] += int(hr.length)
-			// numaUsed[-1] will contain the number of pages moved away from
-			// an unknown node.
+			// numaUsed[-1] will contain the number of pages moved away from an unknown node.
 			p.numaUsed[currNode] -= int(hr.length)
 		}
 	}
