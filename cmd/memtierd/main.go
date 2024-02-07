@@ -74,6 +74,55 @@ func loadConfigFile(filename string) (memtier.Policy, []memtier.Routine) {
 	return policy, routines
 }
 
+func processLoggerFlag(optLog string) {
+	switch optLog {
+	case "", "stderr":
+		memtier.SetLogger(log.New(os.Stderr, "", 0))
+	case "-", "stdout":
+		memtier.SetLogger(log.New(os.Stdout, "", 0))
+	default:
+		logFile, err := os.OpenFile(optLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			exit("failed to open log file %q: %v", optLog, err)
+		}
+		memtier.SetLogger(log.New(logFile, "", 0))
+	}
+}
+
+func processOptCommandFileFlag(optCommandFile string, prompt *memtier.Prompt) {
+	if optCommandFile != "" {
+		commandFile, err := os.Open(optCommandFile)
+		if err != nil {
+			exit("error in opening command file %q: %v", optCommandFile, err)
+		}
+		prompt.SetInput(bufio.NewReader(commandFile))
+		memtier.Log().Debugf("executing commands from file %q", optCommandFile)
+		prompt.Interact()
+		commandFile.Close()
+	}
+}
+
+func commandPreCheck(optConfig, optCommandString, optCommandFile *string, optPrompt *bool) bool {
+	if *optConfig == "" && *optCommandString == "" && *optCommandFile == "" && !*optPrompt {
+		exit("required at least one of: -config CONFIGFILE, -c COMMANDS, -f COMMANDFILE, or -prompt")
+	}
+	return true
+
+}
+
+func setupRoutine(routines []memtier.Routine, policy memtier.Policy) {
+	for r, routine := range routines {
+		if policy != nil {
+			if err := routine.SetPolicy(policy); err != nil {
+				exit("error in setting policy for routine: %s", err)
+			}
+		}
+		if err := routine.Start(); err != nil {
+			exit("error in starting routine %d: %s", r+1, err)
+		}
+	}
+}
+
 func main() {
 	optPrompt := flag.Bool("prompt", false, "Run commands from standard input (after commands from -c and -f)")
 	optConfig := flag.String("config", "", "Load policy and routines from a config FILE")
@@ -85,18 +134,8 @@ func main() {
 
 	flag.Parse()
 
-	switch *optLog {
-	case "", "stderr":
-		memtier.SetLogger(log.New(os.Stderr, "", 0))
-	case "-", "stdout":
-		memtier.SetLogger(log.New(os.Stdout, "", 0))
-	default:
-		logFile, err := os.OpenFile(*optLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
-			exit("failed to open log file %q: %v", *optLog, err)
-		}
-		memtier.SetLogger(log.New(logFile, "", 0))
-	}
+	processLoggerFlag(*optLog)
+
 	memtier.SetLogDebug(*optDebug)
 
 	// Create policy/routines and run commands in the following order:
@@ -108,9 +147,7 @@ func main() {
 	// Otherwise (no interactive prompt or it is not quitting) if policy
 	// or routines are configured, memtierd will not exit.
 
-	if *optConfig == "" && *optCommandString == "" && *optCommandFile == "" && !*optPrompt {
-		exit("required at least one of: -config CONFIGFILE, -c COMMANDS, -f COMMANDFILE, or -prompt")
-	}
+	commandPreCheck(optConfig, optCommandString, optCommandFile, optPrompt)
 
 	var prompt *memtier.Prompt
 	if *optPrompt || *optCommandFile != "" || *optCommandString != "" {
@@ -133,16 +170,8 @@ func main() {
 		}
 	}
 
-	for r, routine := range routines {
-		if policy != nil {
-			if err := routine.SetPolicy(policy); err != nil {
-				exit("error in setting policy for routine: %s", err)
-			}
-		}
-		if err := routine.Start(); err != nil {
-			exit("error in starting routine %d: %s", r+1, err)
-		}
-	}
+	setupRoutine(routines, policy)
+
 	if prompt != nil {
 		prompt.SetRoutines(routines)
 	}
@@ -153,16 +182,7 @@ func main() {
 		prompt.Interact()
 	}
 
-	if *optCommandFile != "" {
-		commandFile, err := os.Open(*optCommandFile)
-		if err != nil {
-			exit("error in opening command file %q: %v", *optCommandFile, err)
-		}
-		prompt.SetInput(bufio.NewReader(commandFile))
-		memtier.Log().Debugf("executing commands from file %q", *optCommandFile)
-		prompt.Interact()
-		commandFile.Close()
-	}
+	processOptCommandFileFlag(*optCommandFile, prompt)
 
 	if *optPrompt {
 		prompt.SetInput(bufio.NewReader(os.Stdin))
