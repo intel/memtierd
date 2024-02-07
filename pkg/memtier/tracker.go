@@ -202,10 +202,30 @@ func flattenDefaultUnion(tc0, tc1 TrackerCounter) TrackerCounter {
 	}
 }
 
-func (tcs *TrackerCounters) shouldAppendCounter(flatTcs TrackerCounters, tcPid int, tcStartAddr uint64) bool {
+func (tcs *TrackerCounters) isTcsUnmatched(flatTcs TrackerCounters, tcPid int, tcStartAddr uint64) bool {
 	return len(flatTcs) == 0 ||
 		flatTcs[len(flatTcs)-1].AR.Pid() != tcPid ||
 		flatTcs[len(flatTcs)-1].AR.Ranges()[0].EndAddr() <= tcStartAddr
+}
+
+// oltci indexes flattened TrackerCounters that overlap with tc.
+// Walk backwards to find the first overlapping TrackerCounter.
+func (tcs *TrackerCounters) calcOltci(flatTcs TrackerCounters, tcPid int, tcStartAddr uint64) int {
+	oltci := len(flatTcs) - 1
+	for oltci >= 0 {
+		prevEndAddr := flatTcs[oltci].AR.Ranges()[0].EndAddr()
+		if flatTcs[oltci].AR.Pid() != tcPid || prevEndAddr < tcStartAddr {
+			// No overlap at this index, the
+			// previous index was the last one.
+			oltci++
+			break
+		}
+		oltci--
+	}
+	if oltci < 0 {
+		oltci = 0
+	}
+	return oltci
 }
 
 // Flattened returns tracker counters with overlapping parts squashed.
@@ -232,27 +252,12 @@ func (tcs *TrackerCounters) Flattened(cut func(tc0 TrackerCounter, ar *AddrRange
 		tcEndAddr := tc.AR.Ranges()[0].EndAddr()
 		tcPid := tc.AR.Pid()
 
-		if tcs.shouldAppendCounter(flatTcs, tcPid, tcStartAddr) {
+		if tcs.isTcsUnmatched(flatTcs, tcPid, tcStartAddr) {
 			flatTcs = append(flatTcs, tc)
 			continue
 		}
 
-		// oltci indexes flattened TrackerCounters that overlap with tc.
-		// Walk backwards to find the first overlapping TrackerCounter.
-		oltci := len(flatTcs) - 1
-		for oltci >= 0 {
-			prevEndAddr := flatTcs[oltci].AR.Ranges()[0].EndAddr()
-			if flatTcs[oltci].AR.Pid() != tcPid || prevEndAddr < tcStartAddr {
-				// No overlap at this index, the
-				// previous index was the last one.
-				oltci++
-				break
-			}
-			oltci--
-		}
-		if oltci < 0 {
-			oltci = 0
-		}
+		oltci := tcs.calcOltci(flatTcs, tcPid, tcStartAddr)
 		oldFlatTcsTail := flatTcs[oltci:]
 		newFlatTcsTail := make(TrackerCounters, 0, len(oldFlatTcsTail)+1)
 		// Walk forward from the first overlapping
