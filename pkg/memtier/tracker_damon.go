@@ -373,17 +373,21 @@ func (debugfs *damonDebugfs) KdamondPids() []int {
 	return []int{kpid}
 }
 
-func (sysfs *damonSysfs) initialize(config *TrackerDamonConfig) error {
-	if sysfs.nrKdamonds != 0 {
-		return fmt.Errorf("damonSysfs interface already initialized: %+v", sysfs)
-	}
-	sysfs.regionsManager = config.SysfsRegionsManager
-	switch sysfs.regionsManager {
+func (sysfs *damonSysfs) printInfo(mtype int) {
+	switch mtype {
 	case 0:
 		log.Debugf("damonSysfs.initialize: regions will be chosen by DAMON")
 	case 1:
 		log.Debugf("damonSysfs.initialize: regions will be written by TrackerDamon")
 	}
+}
+
+func (sysfs *damonSysfs) initialize(config *TrackerDamonConfig) error {
+	if sysfs.nrKdamonds != 0 {
+		return fmt.Errorf("damonSysfs interface already initialized: %+v", sysfs)
+	}
+	sysfs.regionsManager = config.SysfsRegionsManager
+	sysfs.printInfo(sysfs.regionsManager)
 	// Modifying nr_kdamonds is possible only if all kdamonds are
 	// off, and it destroys all contexts and tracked pids in
 	// them. Therefore initialize() initializes them only if they
