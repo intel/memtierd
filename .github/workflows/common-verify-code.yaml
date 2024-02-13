@@ -58,10 +58,6 @@ jobs:
     - name: Golangci lint check
       run: make golangci-lint
 
-      # FIXME(Jing Yan): once the following static checks are fixed, uncomment the following steps.
-    # - name: Cyclomatic check
-    #   run: make cyclomatic-check
-
     - name: Unit test
       run: make race=1 test
 
