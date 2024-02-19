@@ -16,6 +16,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
@@ -41,22 +42,24 @@ func exit(format string, a ...interface{}) {
 func loadConfigFile(filename string) (memtier.Policy, []memtier.Routine) {
 	configBytes, err := os.ReadFile(filename)
 	if err != nil {
-		exit("%s", err)
+		exit("error reading config file %q: %s", filename, err)
 	}
 	var config config
-	err = yaml.Unmarshal(configBytes, &config)
+	decoder := yaml.NewDecoder(bytes.NewReader(configBytes))
+	decoder.KnownFields(true)
+	err = decoder.Decode(&config)
 	if err != nil {
-		exit("error in %q: %s", filename, err)
+		exit("error parsing config file %q: %s", filename, err)
 	}
 
 	policy, err := memtier.NewPolicy(config.Policy.Name)
 	if err != nil {
-		exit("%s", err)
+		exit("error in creating policy %q: %s", config.Policy.Name, err)
 	}
 
 	err = policy.SetConfigJSON(config.Policy.Config)
 	if err != nil {
-		exit("%s", err)
+		exit("error in configuring policy %q: %s", config.Policy.Name, err)
 	}
 
 	routines := []memtier.Routine{}

@@ -16,13 +16,18 @@ package memtier
 
 import (
 	"encoding/json"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 func unmarshal(jsonOrYaml string, obj interface{}) error {
-	if err := json.Unmarshal([]byte(jsonOrYaml), obj); err != nil {
-		if err := yaml.Unmarshal([]byte(jsonOrYaml), obj); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(jsonOrYaml))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(obj); err != nil {
+		decoder := yaml.NewDecoder(strings.NewReader(jsonOrYaml))
+		decoder.KnownFields(true)
+		if err := decoder.Decode(obj); err != nil {
 			return err
 		}
 	}
