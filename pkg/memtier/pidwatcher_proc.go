@@ -50,7 +50,7 @@ func NewPidWatcherProc() (PidWatcher, error) {
 	}
 	// This pidwatcher is expected to work out-of-the-box without
 	// any configuration. Set the defaults immediately.
-	_ = w.SetConfigJSON("")
+	_ = w.SetConfigJSON("{}")
 	return w, nil
 }
 
