@@ -151,7 +151,7 @@ func main() {
 	}
 
 	if *optCommandString != "" {
-		prompt.SetInput(bufio.NewReader(strings.NewReader(*optCommandString)))
+		prompt.SetInput(bufio.NewReader(strings.NewReader(*optCommandString + "\n")))
 		memtier.Log().Debugf("executing commands from command line")
 		prompt.Interact()
 	}
