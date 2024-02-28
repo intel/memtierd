@@ -15,32 +15,40 @@
 /*
 
 	Package memtier implements process memory access tracking and
-	policies for moving pages between NUMA nodes.
+	policies for swapping out pages and moving them between NUMA
+	nodes.
 
 	Component types
 
 	1. Policies (policy*.go) orchestrate trackers, watchers and
-	page moving. They control what to track, when to track, how to
-	interpret tracker counters, and trigger the Mover to handle
-	page moving.
+	moving/swapping out memory. They control what to track, when
+	to track, how to interpret tracker counters, and trigger the
+	Mover to handle page moving.
 
 	2. Trackers (tracker*.go) track memory activity and export
-	observations in TrackerCounters. Watchers (watcher*.go) tell
-	trackers which processes to start/stop tracking. Performance
-	and accuracy of a tracker depends on the method (softdirty,
-	idlepages, damon), and configuration.
+	observations in TrackerCounters. Performance and accuracy of a
+	tracker depends on the method (softdirty, idlepages, damon),
+	and configuration.
 
-	3. The Mover (mover.go) moves pages between NUMA
-	nodes.
+        3. Watchers (watcher*.go) find and filter processes of
+	interest from the system or cgroups. In a typical setup, a
+	policy configures watchers to directly tell trackers which
+	pids to start/stop tracking.
+
+	4. The Mover (mover.go) moves pages between NUMA
+	nodes and swaps them out.
 
 	The Heat policy (policy_heat.go)
 
 	The Heat policy updates a heatmap (counters_heatmap.go) from
 	tracker counters. The heatmap gives a heat class for memory
-	address ranges. The policy triggers page moving when a user
-	has configured target NUMA nodes for a heat class of an
-	address range, and if the address range is not already in any
-	of the NUMA nodes.
+	address ranges. The policy triggers page moving or swapping
+	out when a user has configured target NUMA nodes for a heat
+	class, and if the address range is not already in any of the
+	target NUMA nodes. For proactive moving/swapping, the heat
+	policy supports plugging in heat prediction modules and
+	external programs through the heat forecaster interface
+	(heatforecaster*.go).
 
 	The Age policy (policy_age.go)
 
@@ -48,6 +56,13 @@
 	ranges. Active age is the time during which an address range
 	has been in accessed every time when observed. Idle age means
 	the time since last access.
+
+        The Ratio policy (policy_ratio.go)
+
+        The Ratio policy moves or swaps out a configured ratio of
+        least recently used memory. While the ratio of memory to be
+        moved/swapped out varies in Heat and Age policies depending on
+        memory activity, the ratio is fixed in the Ratio policy.
 
 	The Damon tracker (tracker_damon.go)
 
@@ -73,9 +88,9 @@
 
 	Mover (mover.go)
 
-	The mover moves address ranges from a NUMA node to
-	another. The memory bandwidth (MB/s) can be limited, and move
-	interval (ms) configured.
+	The mover moves address ranges from a NUMA node to another and
+	swaps them out. The memory bandwidth (MB/s) can be limited,
+	and move interval (ms) configured.
 
 	Starting the Heat policy
 
