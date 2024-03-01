@@ -60,6 +60,9 @@ func (w *PidWatcherProc) SetConfigJSON(configJSON string) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	config := &PidWatcherProcConfig{}
+	if configJSON == "" {
+		configJSON = "{}"
+	}
 	if err := unmarshal(configJSON, config); err != nil {
 		return err
 	}
