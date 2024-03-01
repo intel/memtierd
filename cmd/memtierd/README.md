@@ -276,16 +276,83 @@ ssh debian@172.17.0.2 "sudo mv meme /usr/local/bin"
 
 ## Policies
 
-Memtierd implements two policies: age and heat. These policies have
-different ways of interpreting memory tracker counters as page
-activity.
+Memtierd implements three policies: age, heat, and ratio. Age and heat
+policies move or swap out memory based on last access times (age) or
+memory activity class (heat class). The ratio policy moves or swaps
+out a fixed ratio of least recently used memory.
 
-Policies measure and manage the memory of processes that are defined
-in the configuration. Processes are searched by pidwatchers. The
-cgroups pidwatcher looks for processes under listed a list of cgroups
-directories, while the pidlist pidwatcher passes a static list of pids
-to policies. See
+## Watchers
+
+Policies track and manage the memory of processes of
+interest. Processes are found and filtered by pidwatchers. The cgroups
+pidwatcher looks for processes under listed cgroups directories. The
+proc pidwatcher finds all running processes in the system. The pidlist
+pidwatcher finds only the static list of pids. The filter pidwatcher
+filters interesting processes out of all processes found by other
+pidwatchers.
+
+For examples of configuring pidwatchers as part of policy
+configuration, see:
+
 [memtierd-age-idlepage-trackonly.yaml](../../sample-configs/memtierd-age-idlepage-trackonly.yaml).
+
+### Pidwatcher: cgroups
+
+Finds and watches pids in cgroups.
+
+Configuration options:
+- `intervalms` (int): poll interval (ms) for changes in pids in listed
+  cgroup paths.
+- `cgroups` (list of strings): list of absolute cgroup paths to be
+  polled. The pidwatcher will watch all pids found in `cgroup.procs`
+  files in these directories and their subdirectories, recursively.
+
+### Pidwatcher: proc
+
+Finds and watches pids in the system.
+
+Configuration options:
+- `intervalms` (int): poll interval (ms) for changes in pids under
+  `/proc`
+
+### Pidwatcher: pidlist
+
+Finds a static set of pids.
+
+Configuration options:
+- `pids` (list of ints): list of pids.
+
+### Pidwatcher: filter
+
+Filters pids reported by the source pidwatcher.
+
+Configuration options:
+- `source` (object) specifies and configures the source pidwatcher:
+  - `name` (string): name of the source pidwatcher ("proc", "cgroups", ...)
+  - `config` (string): configuration of the source pidwatcher.
+- `filters` (list of filter objects). The pidwatcher finds pids that
+  match by any of listed filter objects. Each filter object contains
+  one or more filter criteria. A pid must comply with all criteria in
+  a single filter object or be filtered out. In other words, `filters`
+  is logical "or" on top level, logical "and" in multi-criteria filter
+  objects. Explicit "and", "or", and "not" criteria are available for
+  more complex scenarios. Available filter criteria:
+  - `procexeregexp` (string): regular expression that matches process
+    executable filepath (/proc/pid/exe)
+  - `minvmsizekb` (int): minimum /proc/pid/status VmSize (total memory
+    size), smaller are filtered out. VmSize includes private and
+    shared data in RAM and disks.
+  - `minvmrsskb` (int): minimum /proc/pid/status VmRSS (resident size
+    in memory), smaller are filtered out. VmRSS includes both private
+    and shared memory in RAM.
+  - `minprivatedirtykb` (int): minimum private dirty size in
+    /proc/pid/smaps.
+  - `not` (filter object): inverse matching. Pids that match given
+    filter object are filtered out.
+  - `and` (list of filter objects): pids that do not match all of the
+    listed filter objects will be filtered out.
+  - `or` (list of fliter objects): pids that do not match any of the
+    listed filter objects will be filtered out.
 
 ### The age policy
 
