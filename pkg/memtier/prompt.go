@@ -990,6 +990,7 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 	create := p.f.String("create", "", "create new pidwatcher NAME")
 	config := p.f.String("config", "", "configure the pidwatcher with JSON string")
 	configDump := p.f.Bool("config-dump", false, "dump current pidwatcher configuration")
+	configFile := p.f.String("config-file", "", "reconfigure pidwatcher with JSON FILE")
 	start := p.f.Bool("start", false, "start the pidwatcher")
 	stop := p.f.Bool("stop", false, "stop the pidwatcher")
 	poll := p.f.Bool("poll", false, "poll the pidwatcher")
@@ -1025,6 +1026,18 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 		} else {
 			p.output("pidwatcher configured successfully\n")
 		}
+	}
+	if *configFile != "" {
+		configJSON, err := os.ReadFile(*configFile)
+		if err != nil {
+			p.output("reading file %q failed: %s", *configFile, err)
+			return csOk
+		}
+		if err := p.pidwatcher.SetConfigJSON(string(configJSON)); err != nil {
+			p.output("config failed: %s\n", err)
+			return csOk
+		}
+		p.output("pidwatcher configured successfully from %q\n", *configFile)
 	}
 	if *configDump {
 		p.output("%s\n", p.pidwatcher.GetConfigJSON())
