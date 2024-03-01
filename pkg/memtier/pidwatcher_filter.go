@@ -119,10 +119,11 @@ func (w *PidWatcherFilter) SetPidListener(l PidListener) {
 // Poll is a method of PidWatcherFilter that triggers the polling process of the source PidWatcher.
 func (w *PidWatcherFilter) Poll() error {
 	w.mutex.Lock()
-	defer w.mutex.Unlock()
 	if w.source == nil {
+		w.mutex.Unlock()
 		return fmt.Errorf("pidwatcher filter: poll: missing pid source")
 	}
+	w.mutex.Unlock()
 	return w.source.Poll()
 }
 
