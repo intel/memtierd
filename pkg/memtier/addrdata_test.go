@@ -34,7 +34,6 @@ func TestOverwrite(t *testing.T) {
 				return
 			}
 		}
-
 	}
 	expectLen := func(expectedLen int) {
 		if len(ads.ads) != expectedLen {

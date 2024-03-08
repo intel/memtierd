@@ -122,7 +122,6 @@ func TestFlattened(t *testing.T) {
 							i, etc.AR.Ranges(), otc.AR.Ranges())
 					}
 				}
-
 			}
 		})
 	}

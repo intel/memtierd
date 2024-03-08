@@ -1,0 +1,76 @@
+linters:
+  # Disable all linters.
+  # Default: false
+  disable-all: true
+  # Enable specific linter
+  # https://golangci-lint.run/usage/linters/#enabled-by-default
+  enable:
+    - gofmt
+    - revive
+linters-settings:
+  revive:
+    ignore-generated-header: true
+    severity: warning
+    rules:
+      - name: time-naming
+      # - name: var-declaration
+      - name: unexported-return
+      - name: errorf
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      # - name: var-naming
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      # - name: argument-limit
+      # - name: cyclomatic
+      # - name: max-public-structs
+      - name: file-header
+      - name: empty-block
+      - name: superfluous-else
+      - name: confusing-naming
+      - name: get-return
+      - name: modifies-parameter
+      # - name: confusing-results
+      # - name: deep-exit
+      # - name: unused-parameter
+      - name: unreachable-code
+      # - name: add-constant
+      # - name: flag-parameter
+      - name: unnecessary-stmt
+      - name: struct-tag
+      - name: modifies-value-receiver
+      - name: constant-logical-expr
+      - name: bool-literal-in-expr
+      # - name: redefines-builtin-id
+      - name: function-result-limit
+      - name: imports-blacklist
+      - name: range-val-in-closure
+      # - name: range-val-address
+      - name: waitgroup-by-value
+      - name: atomic
+      - name: empty-lines
+      # - name: line-length-limit
+      # - name: call-to-gc
+      - name: duplicated-imports
+      - name: import-shadowing
+      - name: bare-return
+      # - name: unused-receiver
+      # - name: unhandled-error
+      - name: cognitive-complexity
+        arguments: [100]
+      - name: string-of-int
+      - name: string-format
+      # - name: early-return
+      - name: unconditional-recursion
+      - name: identical-branches
+      # - name: defer
+      # - name: unexported-naming
+      # - name: function-length
+      - name: nested-structs

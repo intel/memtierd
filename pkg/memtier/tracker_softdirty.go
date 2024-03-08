@@ -261,7 +261,6 @@ func (t *TrackerSoftDirty) sampler() {
 }
 
 func (t *TrackerSoftDirty) countPages() {
-
 	var kpfFile *ProcKpageflagsFile
 	var err error
 

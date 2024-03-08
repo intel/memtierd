@@ -1013,7 +1013,6 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 		}
 		p.pidwatcher = pidwatcher
 		p.output("pidwatcher created\n")
-
 	}
 	// Next actions will require existing pidwatcher
 	if p.pidwatcher == nil {

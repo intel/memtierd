@@ -118,7 +118,6 @@ func FuzzPrompt(f *testing.F) {
 		} else {
 			t.Errorf("error reading output of input %q: %s", input, err)
 		}
-
 	})
 }
 

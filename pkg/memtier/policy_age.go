@@ -325,7 +325,6 @@ func (p *PolicyAge) Start() error {
 	p.cgLoop = make(chan interface{})
 	go p.loop()
 	return nil
-
 }
 
 func (p *PolicyAge) updateCounter(tc *TrackerCounter, timestamp int64) {
@@ -496,7 +495,6 @@ func (p *PolicyAge) loop() {
 			// TODO: skip already moved regions
 			// TODO: mask & choose valid NUMA node
 			p.move(itcs, Node(p.config.IdleNumas[0]))
-
 		}
 		if p.config.ActiveDurationMs > 0 && len(p.config.ActiveNumas) > 0 {
 			// Moving active pages is enabled.
