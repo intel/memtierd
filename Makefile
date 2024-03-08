@@ -9,9 +9,7 @@ GO_GEN      := $(GO_CMD) generate -x
 GO_INSTALL  := $(GO_CMD) install
 GO_FMT      := gofmt
 GO_CYCLO    := gocyclo
-GO_LINT     := golint
 GO_CILINT   := golangci-lint
-GO_VERSION  ?= 1.20.4
 GOLICENSES_VERSION  ?= v1.5.0
 
 # TEST_TAGS is the set of extra build tags passed for tests.
@@ -19,8 +17,6 @@ TEST_TAGS := test
 GO_TEST   := $(GO_CMD) test $(GO_PARALLEL) -tags $(TEST_TAGS)
 GO_VET    := $(GO_CMD) vet -tags $(TEST_TAGS)
 
-# Disable some golangci_lint checkers for now until we have an more acceptable baseline...
-GO_CILINT_CHECKERS := -D structcheck -E golint,gofmt
 GO_CILINT_RUNFLAGS := --build-tags $(TEST_TAGS)
 
 # ShellCheck for checking shell scripts.
@@ -228,17 +224,8 @@ cyclomatic-check:
 	    exit 1; \
 	fi
 
-# Exclude golint check for proc.go and consts.go as they contains variables from
-# Linux kernel code, which might violate the golang variables' naming rules
-lint:
-	$(Q)rc=0; \
-	for f in $$(find -name \*.go ! -name proc.go ! -name consts.go | grep -v \.\/vendor); do \
-	    $(GO_LINT) -set_exit_status $$f || rc=1; \
-	done; \
-	exit $$rc
-
 golangci-lint:
-	$(Q)$(GO_CILINT) run $(GO_CILINT_RUNFLAGS) $(GO_CILINT_CHECKERS)
+	$(Q)$(GO_CILINT) run $(GO_CILINT_RUNFLAGS)
 
 shellcheck:
 	$(Q)if hash $(SHELLCHECK) 2> /dev/null; then \

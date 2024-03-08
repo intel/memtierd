@@ -515,7 +515,6 @@ func pagemapBitsSatisfied(pagemapBits uint64,
 	pageMustBePresent, pageMustNotBePresent,
 	pageMustBeExclusive, pageMustNotBeExclusive,
 	pageMustBeDirty, pageMustNotBeDirty bool) bool {
-
 	if !pagemapBitSatisfied(pagemapBits, PM_PRESENT, pageMustBePresent, pageMustNotBePresent) {
 		return false
 	}

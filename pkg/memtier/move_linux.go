@@ -27,7 +27,6 @@ import (
 )
 
 func movePagesSyscall(pid int, count uint, pages []uintptr, nodes []int, flags int) (uint, []int, error) {
-
 	// syscall:
 	// long move_pages(int pid, unsigned long count, void **pages,
 	//                 const int *nodes, int *status, int flags);

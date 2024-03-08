@@ -53,7 +53,6 @@ type cIovec struct {
 // ProcessMadviseSyscall is a wrapper around the process_madvise system call.
 // It advises the kernel about memory usage patterns of the specified process address ranges.
 func ProcessMadviseSyscall(pidfd int, ranges []AddrRange, advise int, flags uint) (int, syscall.Errno, error) {
-
 	// syscall:
 	// ssize_t syscall(SYS_process_madvise, int pidfd,
 	//                 const struct iovec *iovec, size_t vlen, int advise,
