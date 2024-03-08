@@ -30,8 +30,13 @@ type PidWatcherFilterConfig struct {
 
 // PidFilterConfig holds the configuration for a PidWatcherFilter filter.
 type PidFilterConfig struct {
-	Exclude               bool
 	ProcExeRegexp         string
+	MinVmSizeKb           int
+	MinVmRSSKb            int
+	MinPrivateDirtyKb     int
+	And                   []*PidFilterConfig
+	Or                    []*PidFilterConfig
+	Not                   *PidFilterConfig
 	compiledProcExeRegexp *regexp.Regexp
 }
 
@@ -76,12 +81,8 @@ func (w *PidWatcherFilter) SetConfigJSON(configJSON string) error {
 	}
 	// Validate filters.
 	for _, fc := range config.Filters {
-		if fc.ProcExeRegexp != "" {
-			re, err := regexp.Compile(fc.ProcExeRegexp)
-			if err != nil {
-				return fmt.Errorf("pidwatcher filter: invalid ProcExeRegexp: %q: %w", fc.ProcExeRegexp, err)
-			}
-			fc.compiledProcExeRegexp = re
+		if err := prepareFilter(fc); err != nil {
+			return fmt.Errorf("invalid filter: %s", err)
 		}
 	}
 	w.source = newSource
@@ -153,33 +154,167 @@ func (w *PidWatcherFilter) Dump([]string) string {
 	return fmt.Sprintf("%+v", w)
 }
 
+func prepareFilter(fc *PidFilterConfig) error {
+	if fc.ProcExeRegexp != "" && fc.compiledProcExeRegexp == nil {
+		re, err := regexp.Compile(fc.ProcExeRegexp)
+		if err != nil {
+			return fmt.Errorf("invalid ProcExeRegexp: %q: %w", fc.ProcExeRegexp, err)
+		}
+		fc.compiledProcExeRegexp = re
+	}
+	for _, childFc := range append(fc.And, fc.Or...) {
+		if err := prepareFilter(childFc); err != nil {
+			return err
+		}
+	}
+	if fc.Not != nil {
+		if err := prepareFilter(fc.Not); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func pidsMatchingFilter(fc *PidFilterConfig, pids []int) []int {
+	matchingPids := pids
+	if fc.compiledProcExeRegexp != nil {
+		matchingPids = pidsMatchingFilterProcExeRegexp(fc, matchingPids)
+	}
+	if fc.MinVmSizeKb != 0 {
+		matchingPids = pidsMatchingFilterMinVmSizeKb(fc, matchingPids)
+	}
+	if fc.MinVmRSSKb != 0 {
+		matchingPids = pidsMatchingFilterMinVmRSSKb(fc, matchingPids)
+	}
+	if fc.MinPrivateDirtyKb != 0 {
+		matchingPids = pidsMatchingFilterMinPrivateDirtyKb(fc, matchingPids)
+	}
+	if len(fc.And) > 0 {
+		matchingPids = pidsMatchingFilterAnd(fc.And, matchingPids)
+	}
+	if len(fc.Or) > 0 {
+		matchingPids = pidsMatchingFilterOr(fc.Or, matchingPids)
+	}
+	if fc.Not != nil {
+		matchingPids = pidsMatchingFilterNot(fc.Not, matchingPids)
+	}
+	return matchingPids
+}
+
+func pidsMatchingFilterAnd(fcs []*PidFilterConfig, pids []int) []int {
+	for _, fc := range fcs {
+		if len(pids) == 0 {
+			// short-circuit: all pids already filtered out
+			break
+		}
+		pids = pidsMatchingFilter(fc, pids)
+	}
+	return pids
+}
+
+func pidsMatchingFilterOr(fcs []*PidFilterConfig, pids []int) []int {
+	pidsInOr := map[int]setMemberType{}
+	for _, fc := range fcs {
+		for _, pid := range pidsMatchingFilter(fc, pids) {
+			pidsInOr[pid] = setMember
+		}
+		if len(pidsInOr) == len(pids) {
+			// short-circuit: all pids already matched
+			break
+		}
+	}
+	matchingPids := make([]int, 0, len(pidsInOr))
+	for pid := range pidsInOr {
+		matchingPids = append(matchingPids, pid)
+	}
+	return matchingPids
+}
+
+func pidsMatchingFilterNot(fc *PidFilterConfig, pids []int) []int {
+	notPids := map[int]setMemberType{}
+	for _, pid := range pidsMatchingFilter(fc, pids) {
+		notPids[pid] = setMember
+	}
+	otherPids := make([]int, 0, len(pids)-len(notPids))
+	for _, pid := range pids {
+		if _, ok := notPids[pid]; !ok {
+			otherPids = append(otherPids, pid)
+		}
+	}
+	return otherPids
+}
+
+func pidsMatchingFilterMinVmSizeKb(fc *PidFilterConfig, pids []int) []int {
+	matchingPids := []int{}
+	for _, pid := range pids {
+		vmSize, err := procReadIntFromLine(fmt.Sprintf("/proc/%d/status", pid), "VmSize:", 1)
+		if err != nil {
+			continue
+		}
+		if vmSize >= fc.MinVmSizeKb {
+			matchingPids = append(matchingPids, pid)
+		}
+	}
+	return matchingPids
+}
+
+func pidsMatchingFilterMinVmRSSKb(fc *PidFilterConfig, pids []int) []int {
+	matchingPids := []int{}
+	for _, pid := range pids {
+		vmRSS, err := procReadIntFromLine(fmt.Sprintf("/proc/%d/status", pid), "VmRSS:", 1)
+		if err != nil {
+			continue
+		}
+		if vmRSS >= fc.MinVmRSSKb {
+			matchingPids = append(matchingPids, pid)
+		}
+	}
+	return matchingPids
+}
+
+func pidsMatchingFilterMinPrivateDirtyKb(fc *PidFilterConfig, pids []int) []int {
+	matchingPids := []int{}
+	for _, pid := range pids {
+		privateDirty, err := procReadIntSumFromLines(fmt.Sprintf("/proc/%d/smaps", pid), "Private_Dirty", 1)
+		if err != nil {
+			continue
+		}
+		if privateDirty >= fc.MinPrivateDirtyKb {
+			matchingPids = append(matchingPids, pid)
+		}
+	}
+	return matchingPids
+}
+
+func pidsMatchingFilterProcExeRegexp(fc *PidFilterConfig, pids []int) []int {
+	matchingPids := []int{}
+	for _, pid := range pids {
+		exeFilepath, err := filepath.EvalSymlinks(fmt.Sprintf("/proc/%d/exe", pid))
+		if err != nil {
+			continue
+		}
+		if fc.compiledProcExeRegexp.MatchString(exeFilepath) {
+			matchingPids = append(matchingPids, pid)
+		}
+	}
+	return matchingPids
+}
+
 // AddPids is a method of FilteringPidListener that filters and forwards new PIDs.
 func (f *FilteringPidListener) AddPids(pids []int) {
 	f.w.mutex.Lock()
 	defer f.w.mutex.Unlock()
-	passedPids := []int{}
-	for _, pid := range pids {
-		for _, fc := range f.w.config.Filters {
-			if fc.compiledProcExeRegexp != nil {
-				exeFilepath, err := filepath.EvalSymlinks(fmt.Sprintf("/proc/%d/exe", pid))
-				if err != nil {
-					// pid does not exist anymore, never mind about the rest of the filters
-					break
-				}
-				matched := fc.compiledProcExeRegexp.MatchString(exeFilepath)
-				if (matched && !fc.Exclude) || (!matched && fc.Exclude) {
-					passedPids = append(passedPids, pid)
-				}
-			}
-		}
+	matchingPids := pidsMatchingFilterOr(f.w.config.Filters, pids)
+	if len(matchingPids) == 0 {
+		return
 	}
-	for _, pid := range passedPids {
+	for _, pid := range matchingPids {
 		f.addedPids[pid] = setMember
 	}
 	if f.w.pidListener != nil {
-		f.w.pidListener.AddPids(passedPids)
+		f.w.pidListener.AddPids(matchingPids)
 	} else {
-		log.Warnf("pidwatcher filter: ignoring new pids %v because nobody is listening", passedPids)
+		log.Warnf("pidwatcher filter: ignoring new pids %v because nobody is listening", matchingPids)
 	}
 }
 
@@ -187,16 +322,19 @@ func (f *FilteringPidListener) AddPids(pids []int) {
 func (f *FilteringPidListener) RemovePids(pids []int) {
 	f.w.mutex.Lock()
 	defer f.w.mutex.Unlock()
-	passedPids := []int{}
+	matchingPids := []int{}
 	for _, pid := range pids {
 		if _, ok := f.addedPids[pid]; ok {
-			passedPids = append(passedPids, pid)
+			matchingPids = append(matchingPids, pid)
 			delete(f.addedPids, pid)
 		}
 	}
+	if len(matchingPids) == 0 {
+		return
+	}
 	if f.w.pidListener != nil {
-		f.w.pidListener.RemovePids(passedPids)
+		f.w.pidListener.RemovePids(matchingPids)
 	} else {
-		log.Warnf("pidwatcher filter: ignoring disappeared pids %v because nobody is listening", passedPids)
+		log.Warnf("pidwatcher filter: ignoring disappeared pids %v because nobody is listening", matchingPids)
 	}
 }

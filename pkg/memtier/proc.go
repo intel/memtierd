@@ -178,6 +178,50 @@ func procReadInt(path string) (int, error) {
 	return n, nil
 }
 
+func procReadIntFromLine(path string, linePrefix string, fieldIndex int) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	for lineIndex, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, linePrefix) {
+			fields := strings.Fields(line)
+			if fieldIndex < len(fields) {
+				n, err := strconv.Atoi(fields[fieldIndex])
+				if err != nil {
+					return 0, fmt.Errorf("%s:%d (prefix %q) error parsing int from field index %d", path, lineIndex+1, linePrefix, fieldIndex)
+				}
+				return n, nil
+			}
+			return 0, fmt.Errorf("%s:%d (prefix %q) line has only %d fields, cannot index with %d", path, lineIndex+1, linePrefix, len(fields), fieldIndex)
+		}
+	}
+	return 0, fmt.Errorf("file %q has no line starting with prefix %q", path, linePrefix)
+}
+
+func procReadIntSumFromLines(path string, linePrefix string, fieldIndex int) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	sum := 0
+	for lineIndex, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, linePrefix) {
+			fields := strings.Fields(line)
+			if fieldIndex < len(fields) {
+				n, err := strconv.Atoi(fields[fieldIndex])
+				if err != nil {
+					return sum, fmt.Errorf("%s:%d (prefix %q) error parsing int from field index %d", path, lineIndex+1, linePrefix, fieldIndex)
+				}
+				sum += n
+			} else {
+				return 0, fmt.Errorf("%s:%d (prefix %q) line has only %d fields, cannot index with %d", path, lineIndex+1, linePrefix, len(fields), fieldIndex)
+			}
+		}
+	}
+	return sum, nil
+}
+
 func ProcMemOpen(pid int) (*ProcMemFile, error) {
 	path := fmt.Sprintf("/proc/%d/mem", pid)
 	osFile, err := os.OpenFile(path, os.O_RDONLY, 0)
