@@ -277,17 +277,11 @@ debian-install-crio-pre() {
 }
 
 debian-install-k8s() {
-    local k8sverparam
     debian-refresh-pkg-db
     debian-install-pkg apt-transport-https curl
-    debian-install-repo-key "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
-    debian-install-repo "deb https://apt.kubernetes.io/ kubernetes-xenial main"
-    if [ -n "$k8s" ]; then
-        k8sverparam="=${k8s}-00"
-    else
-        k8sverparam=""
-    fi
-    debian-install-pkg "kubeadm$k8sverparam" "kubelet$k8sverparam" "kubectl$k8sverparam"
+    debian-install-repo-key "https://pkgs.k8s.io/core:/stable:/v${k8s_version}/deb/Release.key"
+    debian-install-repo  "deb https://pkgs.k8s.io/core:/stable:/v${k8s_version}/deb/ /"
+    debian-install-pkg "kubeadm" "kubelet" "kubectl"
 }
 
 debian-set-kernel-cmdline() {
