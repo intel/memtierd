@@ -176,6 +176,7 @@ host-create-vm() {
     VM_CONTAINER_IMAGE=$(docker inspect $VM_CONTAINER_ID | jq '.[0].Image' -r | awk -F: '{print $2}')
     echo "# VM name        : $VM_NAME"
     echo "# VM Linux distro: $VM_DISTRO"
+    echo "# VM Kubernetes  : $k8s_version"
     echo "# VM CRI         : $VM_CRI"
     echo "# VM Docker image: $VM_CONTAINER_IMAGE"
     echo "# VM Docker cntnr: $VM_CONTAINER_ID"

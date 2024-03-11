@@ -1046,6 +1046,18 @@ help() { # script API
 
 ### End of user code helpers
 
+latest-github-release () {
+    local repo="$1"
+    local latest
+    latest=$(wget -q -O- "$repo/releases/latest" | grep '/tree/v[0-9.]*' |
+                 sed -E 's:.*/tree/v([0-9]*\.[0-9]*)(\.[0-9]*).*:\1\2:g' | head -1)
+    if [ -z "$latest" ]; then
+        echo "failed to determine latest release of $repo"
+        exit 1
+    fi
+    echo "$latest"
+}
+
 test-user-code() {
     vm-command-q "kubectl get pods 2>&1 | grep -q NAME" && vm-command "kubectl delete pods --all --now"
     (eval "$code") || {
@@ -1056,14 +1068,23 @@ test-user-code() {
 # Validate parameters
 input_var_names="mode user_script_file distro k8scri k8smaster vm cgroups speed binsrc reinstall_all reinstall_containerd reinstall_crio reinstall_cri_resmgr reinstall_k8s reinstall_oneshot outdir cleanup on_verify_fail on_create_fail on_verify on_create on_launch topology cri_resmgr_cfg cri_resmgr_extra_args cri_resmgr_agent_extra_args code py_consts"
 
+K8S_REPO="https://github.com/kubernetes/kubernetes"
 INTERACTIVE_MODE=0
 mode=$1
 user_script_file=$2
 distro=${distro:-$DEFAULT_DISTRO}
 k8s=${k8s:-none}
 if [[ "$k8s" == "latest" ]]; then
-    k8s="" # if no version is defined, the latest will be installed
+    if ! k8s_release=$(latest-github-release $K8S_REPO); then
+        error "$k8s_release"
+    fi
+    echo "Latest Kubernetes release: $k8s_release"
+elif [[ "$k8s" != "none" ]]; then
+    k8s_release=$k8s
 fi
+k8s_version=$(echo "$k8s_release" | sed -E 's/([0-9]*\.[0-9]*)(\.[0-9]*)/\1/g')
+export k8s_version
+
 k8scri=${k8scri:-"containerd"}
 k8smaster=${k8smaster:-}
 cri_resmgr_pidfile="/var/run/cri-resmgr*.pid"
