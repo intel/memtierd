@@ -1036,7 +1036,29 @@ vm-create-singlenode-cluster() {
 }
 
 vm-create-cluster() {
-    vm-command "kubeadm init --pod-network-cidr=$CNI_SUBNET --cri-socket ${k8scri_sock}"
+    local kubeadm_opts=""
+    if [[ "$k8s_swap" == "1" ]]; then
+        vm-command "kubeadm config print init-defaults | sed \
+          -e 's|criSocket: .*|criSocket: $k8scri_sock|g' \
+          -e 's|serviceSubnet: .*|serviceSubnet: $CNI_SUBNET|g' \
+          -e 's|advertiseAddress: .*|advertiseAddress: '\$(hostname -I | awk '{print \$1}')'|g' \
+          -e 's|name: node|name: '\$(hostname)'|g' \
+          > kubeadm-initconfig.yaml"
+        cat <<EOF | vm-pipe-to-file --append kubeadm-initconfig.yaml
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+failSwapOn: false
+featureGates:
+  NodeSwap: true
+memorySwap:
+  swapBehavior: UnlimitedSwap
+EOF
+        kubeadm_opts="--config kubeadm-initconfig.yaml"
+    else
+        kubeadm_opts="--pod-network-cidr=$CNI_SUBNET --cri-socket ${k8scri_sock}"
+    fi
+    vm-command "kubeadm init $kubeadm_opts"
     if ! grep -q "initialized successfully" <<<"$COMMAND_OUTPUT"; then
         command-error "kubeadm init failed"
     fi
