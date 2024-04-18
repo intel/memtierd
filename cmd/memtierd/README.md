@@ -351,7 +351,7 @@ Configuration options:
     filter object are filtered out.
   - `and` (list of filter objects): pids that do not match all of the
     listed filter objects will be filtered out.
-  - `or` (list of fliter objects): pids that do not match any of the
+  - `or` (list of filter objects): pids that do not match any of the
     listed filter objects will be filtered out.
 
 ### The age policy
