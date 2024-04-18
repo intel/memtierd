@@ -198,6 +198,7 @@ host-create-vm() {
     fi
     echo "# VM Qemu output : docker logs $VM_CONTAINER_ID"
     echo "# VM Qemu monitor: docker exec -it $VM_CONTAINER_ID nc local:/data/monitor"
+    echo "# VM Qemu QMP    : qmp-shell ~/vms/data/$VM_NAME/qmp"
     VM_MONITOR="docker exec -i $VM_CONTAINER_ID nc local:/data/monitor"
     host-wait-vm-ssh-server
     host-wait-cloud-init
