@@ -81,13 +81,14 @@ func (hf *HeatForecasterTrace) Forecast(heats *Heats) (*Heats, error) {
 	defer f.Close()
 	_, _ = f.WriteString(fmt.Sprintf("table: heat forecast %d pid addr size heat created updated\n", time.Now().UnixNano()))
 	for pid, heatranges := range *heats {
-		for _, hr := range *heatranges {
+		heatranges.Foreach(func(hr *HeatRange) int {
 			if hf.config.HideHeatZero && hr.heat < 0.000000001 {
-				continue
+				return 0
 			}
 			_, _ = f.WriteString(fmt.Sprintf("%d %x %d %.9f %d %d\n",
 				pid, hr.addr, hr.length*constUPagesize, hr.heat, hr.created, hr.updated))
-		}
+			return 0
+		})
 	}
 	return nil, nil
 }
