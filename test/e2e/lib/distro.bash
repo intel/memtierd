@@ -30,6 +30,7 @@ distro-setup-proxies()      { distro-resolve "$@"; }
 distro-setup-oneshot()      { distro-resolve "$@"; }
 distro-install-utils()      { distro-resolve "$@"; }
 distro-install-golang()     { distro-resolve "$@"; }
+distro-install-helm()       { distro-resolve "$@"; }
 distro-install-runc()       { distro-resolve "$@"; }
 distro-install-containerd() { distro-resolve "$@"; }
 distro-config-containerd()  { distro-resolve "$@"; }
@@ -1135,6 +1136,10 @@ EOF
 default-restart-crio() {
     vm-command "systemctl daemon-reload && systemctl restart crio" ||
         command-error "failed to restart crio systemd service"
+}
+
+default-install-helm() {
+    vm-command "curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && chmod 700 get_helm.sh && ./get_helm.sh"
 }
 
 default-install-minikube() {

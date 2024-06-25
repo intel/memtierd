@@ -259,7 +259,7 @@ func (t *TrackerDamon) RemovePids(pids []int) {
 		t.removePid(pid)
 	}
 	if err := t.applyPidsWithDamonStarted(); err != nil {
-		log.Errorf("RemovePids failed with errpr: %s", err)
+		log.Errorf("RemovePids failed with error: %s", err)
 		return
 	}
 }

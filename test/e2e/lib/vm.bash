@@ -815,6 +815,10 @@ vm-install-golang() {
     distro-install-golang
 }
 
+vm-install-helm() {
+    distro-install-helm
+}
+
 vm-install-runc() {
     local host_runc="$runc_src/runc"
     local vm_runc="/usr/sbin/runc"
@@ -860,6 +864,17 @@ vm-install-cri() {
             vm-command "systemctl enable --now crio"
         fi
     fi
+}
+
+vm-install-nri-plugin() {
+    local plugin="$1"
+    local namespace_args="-n kube-system"
+    vm-command "(helm repo ls | grep nri-plugins ) || helm repo add nri-plugins https://containers.github.io/nri-plugins" || {
+        command-error "installing nri-plugins helm repo failed"
+    }
+    vm-command "helm install $plugin nri-plugins/$plugin --set nri.patchRuntimeConfig=true $namespace_args" || {
+        command-error "installing nri-plugins/$plugin failed"
+    }
 }
 
 vm-install-containernetworking() {
@@ -1052,7 +1067,7 @@ failSwapOn: false
 featureGates:
   NodeSwap: true
 memorySwap:
-  swapBehavior: UnlimitedSwap
+  swapBehavior: ""
 EOF
         kubeadm_opts="--config kubeadm-initconfig.yaml"
     else
