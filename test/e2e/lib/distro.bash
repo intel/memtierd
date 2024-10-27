@@ -115,7 +115,7 @@ distro-unresolved() {
 ###########################################################################
 
 #
-# Ubuntu 18.04, 20.04, Debian 10, generic debian
+# Ubuntu 18.04, 20.04, 22.04, 24.04, Debian 10, generic debian
 #
 
 ubuntu-18_04-image-url() {
@@ -128,6 +128,10 @@ ubuntu-20_04-image-url() {
 
 ubuntu-22_04-image-url() {
     echo "https://cloud-images.ubuntu.com/releases/jammy/release/ubuntu-22.04-server-cloudimg-amd64.img"
+}
+
+ubuntu-24_04-image-url() {
+    echo "https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-amd64.img"
 }
 
 debian-10-image-url() {
@@ -172,6 +176,20 @@ ubuntu-ssh-user() {
 
 debian-ssh-user() {
     echo debian
+}
+
+ubuntu-apparmor-disable-runc() {
+    vm-command "[ -f /etc/apparmor.d/runc ] && ln -s /etc/apparmor.d/runc /etc/apparmor.d/disable/ && apparmor_parser -R /etc/apparmor.d/runc"
+}
+
+ubuntu-config-containerd() {
+    ubuntu-apparmor-disable-runc
+    default-config-containerd
+}
+
+ubuntu-config-crio() {
+    ubuntu-apparmor-disable-runc
+    default-config-crio
 }
 
 debian-pkg-type() {
