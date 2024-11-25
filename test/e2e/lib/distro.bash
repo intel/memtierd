@@ -404,7 +404,11 @@ centos-install-golang() {
 }
 
 fedora-image-url() {
-    fedora-39-image-url
+    fedora-41-image-url
+}
+
+fedora-41-image-url() {
+    echo "https://mirrors.xtom.de/fedora/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2"
 }
 
 fedora-39-image-url() {
@@ -436,6 +440,18 @@ fedora-install-utils() {
 }
 
 fedora-install-repo() {
+    distro-install-pkg dnf-plugins-core
+    vm-command "dnf config-manager addrepo --from-repofile=$*" ||
+        command-error "failed to install DNF repository $*"
+}
+
+fedora-39-install-repo() { fedora-old-install-repo; }
+fedora-36-install-repo() { fedora-old-install-repo; }
+fedora-35-install-repo() { fedora-old-install-repo; }
+fedora-34-install-repo() { fedora-old-install-repo; }
+fedora-33-install-repo() { fedora-old-install-repo; }
+
+fedora-old-install-repo() {
     distro-install-pkg dnf-plugins-core
     vm-command "dnf config-manager --add-repo $*" ||
         command-error "failed to install DNF repository $*"
@@ -552,31 +568,20 @@ fedora-install-containerd-post() {
 
 fedora-install-k8s() {
     local repo="/etc/yum.repos.d/kubernetes.repo"
-    local base="https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch"
-    local yumkey="https://packages.cloud.google.com/yum/doc/yum-key.gpg"
-    local rpmkey="https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg"
-
     cat <<EOF |
 [kubernetes]
 name=Kubernetes
-baseurl=$base
+baseurl=https://pkgs.k8s.io/core:/stable:/v${k8s_version}/rpm/
 enabled=1
 gpgcheck=1
-repo_gpgcheck=1
-gpgkey=$yumkey $rpmkey
+gpgkey=https://pkgs.k8s.io/core:/stable:/v${k8s_version}/rpm/repodata/repomd.xml.key
 EOF
-        vm-pipe-to-file $repo
-
-    if [ -n "$k8s" ]; then
-        k8sverparam="-${k8s}-0"
-    else
-        k8sverparam=""
-    fi
+      vm-pipe-to-file $repo
 
     vm-command 'grep -iq centos-[78] /etc/os-release' &&
         vm-command "sed -i 's/gpgcheck=1/gpgcheck=0/g' $repo"
 
-    distro-install-pkg iproute-tc kubelet$k8sverparam kubeadm$k8sverparam kubectl$k8sverparam
+    distro-install-pkg iproute-tc kubelet kubeadm kubectl
     vm-command "systemctl enable --now kubelet" ||
         command-error "failed to enable kubelet"
 }
