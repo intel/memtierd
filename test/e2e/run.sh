@@ -375,6 +375,47 @@ run-hook() {
     eval "${hook_code}"
 }
 
+run-until() { # script API
+    # Usage: run-until [--timeout TIMEOUT] CMD
+    #
+    # Keep running CMD (string) until it exits successfully.
+    # The default TIMEOUT is 30 seconds.
+    local cmd timeout poll invalid
+    timeout=30
+    poll=1
+    while [ "${1#-}" != "$1" ] && [ -n "$1" ]; do
+        case "$1" in
+        --timeout)
+            timeout="$2"
+            shift
+            shift
+            ;;
+        --poll)
+            poll="$2"
+            shift
+            shift
+            ;;
+        *)
+            invalid="${invalid}${invalid:+,}\"$1\""
+            shift
+            ;;
+        esac
+    done
+    if [ -n "$invalid" ]; then
+        error "invalid options: $invalid"
+        return 1
+    fi
+    cmd="$@"
+    local retry=$timeout
+    until ( $cmd ); do
+        retry=$(( $retry - 1 ))
+        [[ "$retry" == "0" ]] &&
+            error "waiting for command \"$cmd\" timed out after $timeout s"
+        sleep 1
+    done
+}
+
+
 install-files() {
     # Usage: install-files $(declare -p files_assoc_array)
     #
