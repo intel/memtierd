@@ -177,6 +177,21 @@ func (pp *Pages) OnNode(node Node) *Pages {
 	return np
 }
 
+// OnNodes returns only those Pages that are on any of given nodes.
+func (pp *Pages) OnNodes(nodeMask uint64) *Pages {
+	currentStatus, err := pp.status()
+	if err != nil {
+		return nil
+	}
+	np := &Pages{pid: pp.pid}
+	for i, p := range pp.pages {
+		if nodeMask&(1<<currentStatus[i]) != 0 {
+			np.pages = append(np.pages, p)
+		}
+	}
+	return np
+}
+
 // NotOnNode returns only those Pages that are not on the given node.
 func (pp *Pages) NotOnNode(node Node) *Pages {
 	currentStatus, err := pp.status()
