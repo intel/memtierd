@@ -178,6 +178,25 @@ func procReadInt(path string) (int, error) {
 	return n, nil
 }
 
+func procReadInts(path string) ([]int, error) {
+	var ints []int
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	for lineIndex, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		for fieldIndex, value := range fields {
+			n, err := strconv.Atoi(fields[fieldIndex])
+			if err != nil {
+				return nil, fmt.Errorf("%s:%d error parsing int from field %d: %q", path, lineIndex+1, fieldIndex+1, value)
+			}
+			ints = append(ints, n)
+		}
+	}
+	return ints, nil
+}
+
 func procReadIntFromLine(path string, linePrefix string, fieldIndex int) (int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
