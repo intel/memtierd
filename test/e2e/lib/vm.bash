@@ -1026,7 +1026,7 @@ vm-dlv-add-src() {
 }
 
 vm-dlv-update-config() {
-    vm-command "( echo 'substitute-path:'; cat \$HOME/.config/dlv/config.yml.d/* ) > \$HOME/.config/dlv/config.yml"
+    vm-command "( cat \$HOME/.config/dlv/config.yml.d/* ) > \$HOME/.config/dlv/config.yml"
 }
 
 vm-install-k8s() {
