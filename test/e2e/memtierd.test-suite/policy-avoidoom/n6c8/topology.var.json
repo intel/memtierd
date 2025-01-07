@@ -1,0 +1,5 @@
+[
+    {"mem": "1G", "cores": 1, "nodes": 2, "packages": 2, "node-dist": {"4": 28, "5": 28}},
+    {"nvmem": "8G", "node-dist": {"5": 28, "0": 17}},
+    {"nvmem": "8G", "node-dist": {"2": 17}}
+]
