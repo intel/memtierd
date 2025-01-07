@@ -94,17 +94,42 @@ memtierd-stop() {
 }
 
 memtierd-command() {
-    vm-command "offset=\$(wc -l ${MEMTIERD_OUTPUT} | awk '{print \$1+1}'); echo -e '$1' | socat - tcp4:localhost:${MEMTIERD_PORT}; sleep 1; tail -n+\${offset} ${MEMTIERD_OUTPUT}"
+    local MEMTIERD_PROMPT="\e[38;5;11mmemtierd@vm>\e[0m "
+    command-start "memtierd" "$MEMTIERD_PROMPT" "$1"
+    vm-command-q "offset=\$(wc -l ${MEMTIERD_OUTPUT} | awk '{print \$1+1}'); echo -e '$1' | socat - tcp4:localhost:${MEMTIERD_PORT}; sleep 1; tail -n+\${offset} ${MEMTIERD_OUTPUT}" | command-handle-output
+    command-end "${PIPESTATUS[0]}"
 }
 
+memtierd-make-cgroup() {
+    # Make sure cgroup exists with default controls
+    local cgpath="$1"
+    local cgroot="${2:-/sys/fs/cgroup}"
+    local cghead="${cgpath%%/*}"
+    local cgremainder="${cgpath#*/}"
+    if [ -z "$cgpath" ]; then
+        return
+    fi
+    if vm-command-q "[ -d '$cgroot/$cgpath' ]"; then
+        return
+    fi
+    if [ "$cgpath" == "$cgremainder" ]; then
+        cgremainder=""
+    fi
+    vm-command "mkdir -p $cgroot/$cghead; echo +cpuset > $cgroot/$cghead/cgroup.subtree_control"
+    memtierd-make-cgroup "$cgremainder" "$cgroot/$cghead"
+}
+
+_meme_count=0
 memtierd-meme-start() {
-    vm-command "nohup meme -bs ${MEME_BS:-1G} -brc ${MEME_BRC:-0} -brs ${MEME_BRS:-0} -bro ${MEME_BRO:-0} -bwc ${MEME_BWC:-0} -bws ${MEME_BWS:-0} -bwo ${MEME_BWO:-0} -ttl ${MEME_TTL:-1h} < /dev/null > meme.output.txt 2>&1 & sleep 2; cat meme.output.txt"
+    vm-command "nohup meme -bs ${MEME_BS:-1G} -brc ${MEME_BRC:-0} -brs ${MEME_BRS:-0} -bro ${MEME_BRO:-0} -bwc ${MEME_BWC:-0} -bws ${MEME_BWS:-0} -bwo ${MEME_BWO:-0} -ttl ${MEME_TTL:-1h} < /dev/null > meme${_meme_count}.output.txt 2>&1 & sleep 2; cat meme${_meme_count}.output.txt"
     MEME_PID=$(awk '/pid:/{print $2}' <<<"$COMMAND_OUTPUT")
     if [[ -z "$MEME_PID" ]]; then
         command-error "failed to start meme, pid not found"
     fi
+    _meme_count=$(( _meme_count + 1 ))
     if [[ -n "$MEME_CGROUP" ]]; then
-        vm-command "mkdir /sys/fs/cgroup/$MEME_CGROUP; echo \"${MEME_MEMS}\" > /sys/fs/cgroup/$MEME_CGROUP/cpuset.mems; echo $MEME_PID > /sys/fs/cgroup/$MEME_CGROUP/cgroup.procs"
+        memtierd-make-cgroup "$MEME_CGROUP"
+        vm-command "mkdir -p /sys/fs/cgroup/$MEME_CGROUP; echo \"${MEME_MEMS}\" > /sys/fs/cgroup/$MEME_CGROUP/cpuset.mems; echo $MEME_PID > /sys/fs/cgroup/$MEME_CGROUP/cgroup.procs"
     fi
 }
 
