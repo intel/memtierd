@@ -241,6 +241,42 @@ func procReadIntSumFromLines(path string, linePrefix string, fieldIndex int) (in
 	return sum, nil
 }
 
+// procReadIntListFormat parses List Formats used in cpuset.cpus and .mems.
+// Example: "0-3,5,7-9" -> []int{0, 1, 2, 3, 5, 7, 8, 9}
+func procReadIntListFormat(path string, defaultValue []int) ([]int, error) {
+	data, err := procReadTrimmed(path)
+	if err != nil {
+		return nil, err
+	}
+	if data == "" {
+		return defaultValue, nil
+	}
+	result := []int{}
+	for _, comma := range strings.Split(data, ",") {
+		rng := strings.Split(comma, "-")
+		if len(rng) == 1 {
+			n, err := strconv.Atoi(rng[0])
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, n)
+			continue
+		}
+		first, err := strconv.Atoi(rng[0])
+		if err != nil {
+			return nil, err
+		}
+		last, err := strconv.Atoi(rng[1])
+		if err != nil {
+			return nil, err
+		}
+		for n := first; n <= last; n++ {
+			result = append(result, n)
+		}
+	}
+	return result, nil
+}
+
 func ProcMemOpen(pid int) (*ProcMemFile, error) {
 	path := fmt.Sprintf("/proc/%d/mem", pid)
 	osFile, err := os.OpenFile(path, os.O_RDONLY, 0)
