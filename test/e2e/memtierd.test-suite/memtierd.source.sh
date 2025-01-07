@@ -140,6 +140,40 @@ memtierd-meme-stop() {
     fi
 }
 
+_python3_count=0
+_python3_outputs=()
+_python3_ports=()
+_python3_pids=()
+memtierd-python3-start() {
+    PYTHON3_ID=$_python3_count
+    _python3_outputs[$PYTHON3_ID]=python3.$PYTHON3_ID.output.txt
+    _python3_ports[$PYTHON3_ID]=$(( 33100 + _python3_count ))
+    _python3_count=$(( _python3_count + 1 ))
+    local PYTHON3_OUTPUT=${_python3_outputs[$PYTHON3_ID]}
+    local PYTHON3_PORT=${_python3_ports[$PYTHON3_ID]}
+    local put_in_cgroup=""
+    if [ -n "$PYTHON3_CGROUP" ]; then
+        memtierd-make-cgroup "$PYTHON3_CGROUP"
+        put_in_cgroup="echo \$\$ > /sys/fs/cgroup/$PYTHON3_CGROUP/cgroup.procs; "
+    fi
+    vm-command "nohup sh -c '${put_in_cgroup}socat tcp4-listen:${PYTHON3_PORT},fork,reuseaddr - | (python3 -i -u; pkill -f \"socat tcp4-listen:${PYTHON3_PORT}\")' >& ${PYTHON3_OUTPUT} & sleep 2; cat ${PYTHON3_OUTPUT}; echo;"
+    memtierd-python3-command 'import sys; sys.ps1, sys.ps2 = "", ""; print("python3 prompt disabled <<<")'
+    memtierd-python3-command "import os; print(os.getpid())"
+    _python3_pids[$PYTHON3_ID]=$COMMAND_OUTPUT
+}
+
+memtierd-python3-command() {
+    local PYTHON3_OUTPUT=${_python3_outputs[$PYTHON3_ID]}
+    local PYTHON3_PORT=${_python3_ports[$PYTHON3_ID]}
+    local PYTHON3_PROMPT="\e[38;5;11mpython[$PYTHON3_ID]@vm>>>\e[0m "
+    if [[ -z "$PYTHON3_PORT" ]]; then
+        error "memtierd-python3-command: invalid PYTHON3_ID=$PYTHON3_ID, socat port does not exist"
+    fi
+    command-start "python3-$PYTHON3_ID" "$PYTHON3_PROMPT" "$1"
+    vm-command-q "offset=\$(wc -l ${PYTHON3_OUTPUT} | awk '{print \$1+1}'); echo -e '$1' | socat - tcp4:localhost:${PYTHON3_PORT}; sleep 1; tail -n+\${offset} ${PYTHON3_OUTPUT}" | command-handle-output
+    command-end "${PIPESTATUS[0]}"
+}
+
 next-round() {
     local round_counter_var=$1
     local round_counter_val=${!1}
