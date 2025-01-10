@@ -276,10 +276,13 @@ ssh debian@172.17.0.2 "sudo mv meme /usr/local/bin"
 
 ## Policies
 
-Memtierd implements three policies: age, heat, and ratio. Age and heat
-policies move or swap out memory based on last access times (age) or
-memory activity class (heat class). The ratio policy moves or swaps
-out a fixed ratio of least recently used memory.
+Memtierd implements four policies: age, heat, ratio, and
+avoid-oom. Age and heat policies move or swap out memory based on last
+access times (age) or memory activity class (heat class). The ratio
+policy moves or swaps out a fixed ratio of least recently used
+memory. The avoid-oom policy tracks cpuset.mems from cgroups, and
+moves memory between nodes in case of raising risk of kernel
+out-of-memory killer.
 
 ## Watchers
 
@@ -407,6 +410,84 @@ memtierd> policy -create heat -config {"Tracker":{"Name":"idlepage","Config":"{\
 ```
 
 The heat policy works with all trackers.
+
+### The avoid-oom policy
+
+The purpose of the avoid-oom policy is to balance memory between sets
+of NUMA nodes so that Linux oom-killer will not kill processes due to
+out-of-memory.
+
+Example: a critical low-latency process running on a two-socket system
+is allowed to use memory only from NUMA nodes 0-1 as they have low
+enough latency to the CPU package 0 where the process is running. On
+the other hand, best effort processes are allowed to use all other
+CPUs from both packages, and memory from any NUMA node (0-3) in the
+same system. If best effort processes have consumed almost all memory
+from nodes 0-1 and the low-latency process requests more memory than
+available on these nodes, oom-killer resolves the out-of-memory
+situation by killing one or more processes that use memory on these
+nodes. If the avoid-oom policy detects this risk early enough, it
+transparently moves memory of best effort processes to from NUMA nodes
+0-1 to 2-3, avoiding out-of-memory even before throttling memory
+allocations of best effort processes.
+
+The avoid-oom policy keeps tracking amount of free memory in all sets
+of NUMA nodes that it finds in tracked cgroups. The policy divides
+nodes into high, medium and no pressure nodes. If there is a set of
+NUMA nodes where total available memory has fallen below policy's
+"start moving" watermark, all nodes in the set are under high
+pressure. On the other hand, if the total available memory of a node
+set is above start but below stop moving watermarks, nodes in the set
+are under medium pressure at minimum. Nodes that are not under high or
+medium pressure are "no pressure" nodes.
+
+The policy moves memory from high to no pressure node sets. If there
+is enough available memory in no pressure nodes, this is done until
+high pressure has changed into no pressure. The policy searches for
+processes that use memory from any of the high pressure nodes but are
+allowed to use memory from no pressure nodes, too. When such a process
+is found, memory pages in high pressure nodes is moved to no pressure
+nodes. If there are many, moving processes with highest OOM score is
+prioritized.
+
+Configuration options:
+
+- `StartFreeingMemory` and `StopFreeingMemory`: if available memory on
+  a node set falls below `StartFreeingMemory`, the policy tries to
+  move memory until it raises above `StopFreeingMemory`. Values are
+  either absolute amounts of available memory, for instance: "16G", or
+  percentage of total memory in a node set, for instance "25%".
+
+- `Cgroups`: list of absolute cgroup v2 paths. All listed paths are
+  searched recursively to find NUMA node sets (cpuset.mems) and
+  processes whose memory can be moved (cgroups.procs).
+
+- `IntervalMs` interval how often the policy polls cgroups, memory
+  available on NUMA nodes, and triggers moves if needed and possible.
+
+- `Mover`:
+  - `Bandwidth`: integer, memory balancing bandwidth limit, MB/s.
+  - `IntervalMs`: integer, interval of move_pages syscalls when moving
+    memory, milliseconds. The shorter the interval the smaller number
+    of pages is moved on each call and the shorter the move time, but
+    the higher the overhead due to more frequent syscalls and memory
+    locking.
+
+Configuration example:
+
+```
+policy:
+  name: avoid-oom
+  config: |
+    intervalms: 5000
+    startfreeingmemory: 10%
+    stopfreeingmemory: 15%
+    cgroups:
+    - /sys/fs/cgroup/kubepods.slice
+    mover:
+      intervalms: 100
+      bandwidth: 250
+```
 
 ## Trackers
 
