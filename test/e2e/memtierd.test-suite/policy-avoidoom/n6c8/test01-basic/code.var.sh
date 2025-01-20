@@ -171,8 +171,8 @@ policy:
   name: avoid-oom
   config: |
     intervalms: 1000
-    startfreeingmemory: 25%
-    stopfreeingmemory: 25%
+    startfreeingmemory: 256 MB
+    stopfreeingmemory: 264 MB
     cgroups:
     - /sys/fs/cgroup/e2e-avoidoom
     mover:
