@@ -16,42 +16,42 @@ package memtier
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
 
+var bytesSuffixMultiplier map[string]int64 = map[string]int64{
+	"B":  1,
+	"K":  1 << 10,
+	"KB": 1 << 10,
+	"M":  1 << 20,
+	"MB": 1 << 20,
+	"G":  1 << 30,
+	"GB": 1 << 30,
+	"T":  1 << 40,
+	"TB": 1 << 40,
+}
+
+var sortedBytesSuffixes []string
+
 // ParseBytes parses a string representation of bytes and returns the equivalent number of bytes.
 // It supports units like k, M, G, T (kilo, mega, giga, tera) and expects the input string
 // to be in the format of "<numeric part><unit>" (e.g., "10M" for 10 megabytes).
-func ParseBytes(s string) (int64, error) {
-	origS := s
-	factor := int64(1)
-	if len(s) == 0 {
-		return 0, fmt.Errorf("syntax error in bytes: string is empty")
+func ParseBytes(bytes string) (int64, error) {
+	if len(bytes) == 0 {
+		return 0, fmt.Errorf("empty string")
 	}
-	if s[len(s)-1] == 'B' {
-		s = s[:len(s)-1]
+	for _, suffix := range sortedBytesSuffixes {
+		if strings.HasSuffix(strings.ToUpper(bytes), suffix) {
+			multiplier := bytesSuffixMultiplier[suffix]
+			value, err := strconv.ParseInt(
+				strings.TrimSpace(strings.TrimSuffix(bytes, suffix)),
+				10, 64)
+			return value * multiplier, err
+		}
 	}
-	numpart := s[:len(s)-1]
-	switch c := s[len(s)-1]; {
-	case c == 'k':
-		factor = 1024
-	case c == 'M':
-		factor = 1024 * 1024
-	case c == 'G':
-		factor = 1024 * 1024 * 1024
-	case c == 'T':
-		factor = 1024 * 1024 * 1024 * 1024
-	case '0' <= c && c <= '9':
-		numpart = s
-	default:
-		return 0, fmt.Errorf("syntax error in bytes %q: unexpected unit %q", origS, c)
-	}
-	n, err := strconv.ParseInt(strings.TrimSpace(numpart), 10, 0)
-	if err != nil {
-		return 0, fmt.Errorf("syntax error in bytes %q: bad numeric part %q", origS, numpart)
-	}
-	return n * factor, nil
+	return strconv.ParseInt(bytes, 10, 64)
 }
 
 // MustParseBytes is a helper function that wraps ParseBytes and panics if an error occurs.
@@ -62,4 +62,14 @@ func MustParseBytes(s string) int64 {
 		panic(err)
 	}
 	return bytes
+}
+
+// initialize module parameters at start
+func init() {
+	for suffix := range bytesSuffixMultiplier {
+		sortedBytesSuffixes = append(sortedBytesSuffixes, suffix)
+	}
+	sort.Slice(sortedBytesSuffixes, func(i, j int) bool {
+		return len(sortedBytesSuffixes[i]) > len(sortedBytesSuffixes[j])
+	})
 }

@@ -401,33 +401,7 @@ func parsePercentageOrBytes(watermark string, total int64) (int64, error) {
 		}
 		return total * percentage / 100, nil
 	}
-	return parseBytes(watermark)
-}
-
-var bytesSuffixMultiplier map[string]int64 = map[string]int64{
-	"K":  1 << 10,
-	"KB": 1 << 10,
-	"M":  1 << 20,
-	"MB": 1 << 20,
-	"G":  1 << 30,
-	"GB": 1 << 30,
-	"T":  1 << 40,
-	"TB": 1 << 40,
-}
-
-func parseBytes(bytes string) (int64, error) {
-	if len(bytes) == 0 {
-		return 0, fmt.Errorf("empty string")
-	}
-	for suffix, multiplier := range bytesSuffixMultiplier {
-		if strings.HasSuffix(strings.ToUpper(bytes), suffix) {
-			value, err := strconv.ParseInt(
-				strings.TrimSpace(strings.TrimSuffix(bytes, suffix)),
-				10, 64)
-			return value * multiplier, err
-		}
-	}
-	return strconv.ParseInt(bytes, 10, 64)
+	return ParseBytes(watermark)
 }
 
 func (p *PolicyAvoidOom) loop(cmd chan chan interface{}) {
