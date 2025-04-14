@@ -445,8 +445,11 @@ fedora-install-utils() {
 
 fedora-install-repo() {
     distro-install-pkg dnf-plugins-core
-    vm-command "dnf config-manager addrepo --from-repofile=$*" ||
-        command-error "failed to install DNF repository $*"
+    vm-command "dnf config-manager addrepo --from-repofile=$*" || {
+        if [[ "$COMMAND_OUTPUT" != *"already exists"* ]]; then
+           command-error "failed to install DNF repository $*"
+        fi
+    }
 }
 
 fedora-39-install-repo() { fedora-old-install-repo; }
