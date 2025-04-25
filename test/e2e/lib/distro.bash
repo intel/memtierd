@@ -404,7 +404,11 @@ centos-install-golang() {
 }
 
 fedora-image-url() {
-    fedora-41-image-url
+    fedora-42-image-url
+}
+
+fedora-42-image-url() {
+    echo "https://mirrors.xtom.de/fedora/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2"
 }
 
 fedora-41-image-url() {
@@ -558,7 +562,7 @@ fedora-install-crio() {
 }
 
 fedora-install-containerd-pre() {
-    distro-install-repo https://download.docker.com/linux/fedora/docker-ce.repo
+    # distro-install-repo https://download.docker.com/linux/fedora/docker-ce.repo
     fedora-install-containernetworking-plugins
 }
 
