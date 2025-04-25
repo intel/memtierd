@@ -846,8 +846,15 @@ vm-install-cri() {
             if [ -n "$COMMAND_OUTPUT" ] && [ "x$COMMAND_STATUS" == "x0" ]; then
                 vm_cri_dir="${COMMAND_OUTPUT%/*}"
             fi
-            for f in ctr containerd containerd-stress containerd-shim containerd-shim-runc-v1 containerd-shim-runc-v2; do
+            for f in ctr containerd containerd-stress containerd-shim-runc-v2; do
                 vm-put-file "$containerd_src/bin/$f" "$vm_cri_dir/$f"
+            done
+            for f in containerd-shim containerd-shim-runc-v1; do
+                if [[ -f "$containerd_src/bin/$f" ]]; then
+                    vm-put-file "$containerd_src/bin/$f" "$vm_cri_dir/$f"
+                else
+                    echo "containerd install: skipping (not found) $f"
+                fi
             done
             vm-command "systemctl enable --now containerd"
         fi
