@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DEMO_TITLE="Memtierd End-to-End Testing"
-DEFAULT_DISTRO="ubuntu-22.04"
+DEFAULT_DISTRO="ubuntu-24.04"
 
 PV=${PV:-""}
 
