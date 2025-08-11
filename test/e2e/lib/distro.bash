@@ -146,6 +146,10 @@ debian-sid-image-url() {
     echo "https://cloud.debian.org/images/cloud/sid/daily/latest/debian-sid-generic-amd64-daily.qcow2"
 }
 
+debian-setup-oneshot() {
+    vm-command 'for timer in $(systemctl | awk "/apt-/{print \$1}"); do ( set -x; systemctl stop $timer; systemctl disable $timer; ) done'
+}
+
 ubuntu-download-kernel() {
     # Usage:
     #   ubuntu-download-kernel list
