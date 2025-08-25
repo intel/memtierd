@@ -589,6 +589,37 @@ vm-pipe-to-file() { # script API
     vm-put-file --cleanup $append "$tmp" "$1"
 }
 
+vm-resize-rootfs() { # script API
+    # Usage: vm-resize-root NEWSIZE
+    #
+    # Resizes root file system to NEWSIZE given in GB.
+    #
+    local size="$1"
+    local num="^[0-9]+$"
+    if [[ ! "$size" =~ $num ]] || (( "$size" < 10 )) || (( "$size" > 10000 )); then
+        error "vm-resize-root: invalid SIZE [GB], expected 10 <= SIZE <= 10000"
+        return 1
+    fi
+    vm-monitor "block_resize data $(( size * 1024 ))"
+    vm-command "
+        rootdev=\$(df / | tail -1 | awk '{print \$1}')
+        blockdev=\${rootdev%%[0-9]*}
+        partnum=\${rootdev##*[a-z]}
+        [[ "\$blockdev" == "/dev/"* ]] || { echo parsing blockdev failed; exit 1; }
+        [[ "\$partnum" =~ $num ]] || { echo parsing partnum failed; exit 1; }
+        ( set -x; growpart \$blockdev \$partnum ) || exit 1
+        fstype=\$(stat -f -c %T /)
+        case \"\$fstype\" in
+            ext*)   ( set -x; resize2fs \$rootdev ) ;;
+            xfs*)   ( set -x; xfs_growfs / ) ;;
+            btrfs*) ( set -x; btrfs filesystem resize max / ) ;;
+            f2fs*)  ( set -x; resize.f2fs \$rootdev ) ;;
+            *)      echo unsupported filesystem \$fstype ;;
+        esac
+        df -h /
+        "
+}
+
 vm-sed-file() { # script API
     # Usage: vm-sed-file PATH-IN-VM SED-EXTENDED-REGEXP-COMMANDS
     #
