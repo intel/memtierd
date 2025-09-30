@@ -896,7 +896,7 @@ vm-install-cri() {
             if [ -n "$COMMAND_OUTPUT" ] && [ "x$COMMAND_STATUS" == "x0" ]; then
                 vm_cri_dir="${COMMAND_OUTPUT%/*}"
             fi
-            for f in crio crio-status pinns; do
+            for f in crio pinns; do
                 vm-put-file "$crio_src/bin/$f" "$vm_cri_dir/$f"
             done
             vm-command "systemctl enable --now crio"
