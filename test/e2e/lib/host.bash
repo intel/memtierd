@@ -266,9 +266,15 @@ host-wait-vm-ssh-server() {
 }
 
 host-wait-cloud-init() {
+    local output
     retries=60
     retries_left=$retries
-    while ! $SSH -o ConnectTimeout=2 ${VM_SSH_USER}@${VM_IP} sudo cloud-init status --wait 2>/dev/null; do
+    while ! output=$($SSH -o ConnectTimeout=2 ${VM_SSH_USER}@${VM_IP} sudo cloud-init status --wait 2>/dev/null); do
+        if [[ "$output" == *"status: done"* ]]; then
+            echo "WARNING: not perfect but probably good enough cloud-init status:"
+            vm-command "cloud-init status --long"
+            break
+        fi
         if [ "$retries" == "$retries_left" ]; then
             echo -n "Waiting for VM cloud-init to finish..."
         fi
