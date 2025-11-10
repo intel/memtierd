@@ -60,10 +60,11 @@ const trackerIdlePageDefaults string = `{"PagesInRegion":512,"MaxCountPerRegion"
 
 // TrackerIdlePage is a tracker implementation for monitoring idle pages.
 type TrackerIdlePage struct {
-	mutex   sync.Mutex
-	config  *TrackerIdlePageConfig
-	regions map[int][]*AddrRanges
-	pmAttrs uint64 // only pages with these pagemap attribute
+	mutex        sync.Mutex
+	config       *TrackerIdlePageConfig
+	regions      map[int][]*AddrRanges
+	regionsMutex sync.Mutex
+	pmAttrs      uint64 // only pages with these pagemap attribute
 	// requirements are handled accesses maps pid
 	// -> startAddr -> lengthPages -> num of
 	// accesses
@@ -136,6 +137,8 @@ func (t *TrackerIdlePage) addRanges(pid int) {
 // AddPids adds process IDs to be tracked by TrackerIdlePage.
 func (t *TrackerIdlePage) AddPids(pids []int) {
 	log.Debugf("TrackerIdlePage: AddPids(%v)\n", pids)
+	t.regionsMutex.Lock()
+	defer t.regionsMutex.Unlock()
 	for _, pid := range pids {
 		t.addRanges(pid)
 	}
@@ -145,7 +148,9 @@ func (t *TrackerIdlePage) AddPids(pids []int) {
 func (t *TrackerIdlePage) RemovePids(pids []int) {
 	log.Debugf("TrackerIdlePage: RemovePids(%v)\n", pids)
 	if pids == nil {
+		t.regionsMutex.Lock()
 		t.regions = make(map[int][]*AddrRanges, 0)
+		t.regionsMutex.Unlock()
 		return
 	}
 	for _, pid := range pids {
@@ -154,10 +159,10 @@ func (t *TrackerIdlePage) RemovePids(pids []int) {
 }
 
 func (t *TrackerIdlePage) removePid(pid int) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
 	delete(t.regions, pid)
+	t.mutex.Lock()
 	delete(t.accesses, pid)
+	t.mutex.Unlock()
 }
 
 // ResetCounters resets the access counters of TrackerIdlePage.
@@ -238,9 +243,11 @@ func (t *TrackerIdlePage) sampler() {
 		case <-ticker.C:
 			currentNs := time.Now().UnixNano()
 			if time.Duration(currentNs-lastRegionsUpdateNs) >= time.Duration(t.config.RegionsUpdateMs)*time.Millisecond {
+				t.regionsMutex.Lock()
 				for pid := range t.regions {
 					t.addRanges(pid)
 				}
+				t.regionsMutex.Unlock()
 				lastRegionsUpdateNs = currentNs
 			}
 			t.countPages()
