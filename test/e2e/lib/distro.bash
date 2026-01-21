@@ -296,7 +296,7 @@ debian-install-cri-dockerd-pre() {
 
 debian-install-crio-pre() {
     debian-refresh-pkg-db
-    debian-install-pkg libgpgme11 conmon runc containernetworking-plugins conntrack || true
+    debian-install-pkg libgpgme11 conmon crun runc containernetworking-plugins conntrack || true
 }
 
 debian-install-k8s() {
@@ -1129,7 +1129,7 @@ default-restart-containerd() {
 default-install-crio() {
     [ -n "$crio_src" ] || error "crio install error: crio_src is not set"
     [ -x "$crio_src/bin/crio" ] || error "crio install error: file not found $crio_src/bin/crio"
-    for f in crio crio-status pinns; do
+    for f in crio pinns; do
         vm-put-file "$crio_src/bin/$f" "/usr/bin/$f"
     done
     cat <<EOF |
