@@ -338,8 +338,24 @@ centos-8-image-url() {
     echo "https://cloud.centos.org/centos/8/x86_64/images/CentOS-8-GenericCloud-8.2.2004-20200611.2.x86_64.qcow2"
 }
 
+centos-9-image-url() {
+    echo "https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-20250922.0.x86_64.qcow2"
+}
+
+centos-10-image-url() {
+    echo "https://cloud.centos.org/centos/10-stream/x86_64/images/CentOS-Stream-GenericCloud-x86_64-10-20250923.0.x86_64.qcow2"
+}
+
 centos-ssh-user() {
     echo centos
+}
+
+centos-9-ssh-user() {
+    echo cloud-user
+}
+
+centos-10-ssh-user() {
+    echo cloud-user
 }
 
 centos-7-install-utils() {
@@ -396,6 +412,14 @@ centos-8-install-crio() {
 
 centos-8-install-containerd-pre() {
     distro-install-repo https://download.docker.com/linux/centos/docker-ce.repo
+}
+
+centos-9-install-containerd-pre() {
+    fedora-old-install-repo https://download.docker.com/linux/centos/docker-ce.repo
+}
+
+centos-10-install-containerd-pre() {
+    fedora-old-install-repo https://download.docker.com/linux/centos/docker-ce.repo
 }
 
 centos-7-k8s-cni() {
@@ -589,7 +613,7 @@ gpgkey=https://pkgs.k8s.io/core:/stable:/v${k8s_version}/rpm/repodata/repomd.xml
 EOF
       vm-pipe-to-file $repo
 
-    vm-command 'grep -iq centos-[78] /etc/os-release' &&
+    vm-command 'grep -iq centos- /etc/os-release' &&
         vm-command "sed -i 's/gpgcheck=1/gpgcheck=0/g' $repo"
 
     distro-install-pkg iproute-tc kubelet kubeadm kubectl
