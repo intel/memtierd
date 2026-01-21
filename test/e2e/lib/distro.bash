@@ -216,8 +216,14 @@ debian-install-repo() {
     if [ $# = 1 ]; then
         # shellcheck disable=SC2086,SC2048
         set -- $*
+        addline="$*"
+        repofile="$3-$4.list"
+    else
+        addline="$1"
+        repofile="$2-$3.list"
     fi
-    vm-command "echo $* > /etc/apt/sources.list.d/$3-$4.list && apt-get update" ||
+
+    vm-command "echo $addline > /etc/apt/sources.list.d/$repofile && apt-get update" ||
         command-error "failed to install apt repository $*"
 }
 
@@ -302,8 +308,7 @@ debian-install-crio-pre() {
 debian-install-k8s() {
     debian-refresh-pkg-db
     debian-install-pkg apt-transport-https curl
-    debian-install-repo-key "https://pkgs.k8s.io/core:/stable:/v${k8s_version}/deb/Release.key"
-    debian-install-repo  "deb https://pkgs.k8s.io/core:/stable:/v${k8s_version}/deb/ /"
+    debian-install-repo  "deb [trusted=yes] https://pkgs.k8s.io/core:/stable:/v${k8s_version}/deb/ /" k8s stable
     debian-install-pkg "kubeadm" "kubelet" "kubectl"
 }
 
