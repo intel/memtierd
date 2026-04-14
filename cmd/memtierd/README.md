@@ -276,11 +276,13 @@ ssh debian@172.17.0.2 "sudo mv meme /usr/local/bin"
 
 ## Policies
 
-Memtierd implements four policies: age, heat, ratio, and
+Memtierd implements five policies: age, heat, ratio, demote-idle, and
 avoid-oom. Age and heat policies move or swap out memory based on last
 access times (age) or memory activity class (heat class). The ratio
 policy moves or swaps out a fixed ratio of least recently used
-memory. The avoid-oom policy tracks cpuset.mems from cgroups, and
+memory. The demote-idle policy demotes pages that have stayed idle
+between consecutive scans, without keeping any history of access
+counts. The avoid-oom policy tracks cpuset.mems from cgroups, and
 moves memory between nodes in case of raising risk of kernel
 out-of-memory killer.
 
@@ -384,6 +386,156 @@ memtierd> policy -create age -config {"Tracker":{"Name":"softdirty","Config":"{\
 
 The age policy works with idlepage and softdirty trackers, but not
 with the damon tracker.
+
+### The demote-idle policy
+
+The demote-idle policy is a simplified alternative to the age policy
+for one-directional memory demotion. Instead of maintaining per-page
+access counters and duration histories like the age policy does, it
+relies solely on the kernel idle page flag (`/sys/kernel/mm/page_idle/bitmap`)
+to determine whether a page has been accessed since the last scan.
+
+On every scan round the policy:
+
+1. Reads pages of interest (from PidWatcher or a PagesOfInterestDir).
+2. Checks the kernel idle page flag of each page.
+3. Sends all pages whose idle flag is still set (not accessed since
+   the previous round) to the mover for demotion.
+4. Sets the idle flag on all remaining pages of interest so that
+   access can be detected on the next round.
+
+Because demote-idle does not use any tracker or maintain access
+history, it uses significantly less memory than the age or heat
+policies. This makes it suitable for monitoring very large numbers of
+pages. The trade-off is that it only supports demotion (idle pages
+moved to slower NUMA nodes) -- not promotion of active pages. It also
+does not distinguish degrees of idleness: a page is either accessed or
+not between two consecutive scans.
+
+**Differences from the age policy:**
+
+| Feature              | age                        | demote-idle                |
+| -------------------- | -------------------------- | -------------------------- |
+| Access history       | Idle/active durations      | Single-round idle flag     |
+| Memory overhead      | Counters per region        | Minimal (no counters)      |
+| Promotion            | Yes (ActiveNumas)          | No                         |
+| Demotion             | Yes (IdleNumas)            | Yes (IdleNumas)            |
+| External POI source  | No                         | Yes (PagesOfInterestDir)   |
+
+**Kernel requirements:** `CONFIG_IDLE_PAGE_TRACKING=y`. Verify with:
+```
+[ -f /sys/kernel/mm/page_idle/bitmap ] && echo supported
+```
+
+**Note on Transparent Huge Pages (THP):** When THP is enabled, the
+idle page bitmap operates at compound page granularity (2 MB). Any
+access to a sub-page within a THP clears the idle flag for the
+entire compound page, which can cause pages to appear active when
+only a small portion is used. For accurate page-level tracking,
+disable THP before starting the tracked processes:
+```
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+```
+
+Configuration options:
+
+- `IntervalMs` (int, required): length of the scan interval in
+  milliseconds. Each round checks idle flags and demotes idle pages.
+
+- `IdleNumas` (list of ints, required): NUMA node(s) to which idle
+  pages are demoted. The first node in the list is used as the move
+  target.
+
+- `PidWatcher` (object, optional): configures which processes to
+  watch. Contains `Name` (string) and `Config` (string). Any
+  pidwatcher can be used (cgroups, proc, pidlist, filter). When a
+  PidWatcher is configured, pages of interest are read from
+  `/proc/PID/maps` of each watched process. Pages already on the
+  target IdleNumas node are filtered out before moving, and
+  successfully moved pages are removed from the pages of interest.
+  Either `PidWatcher` or `PagesOfInterestDir` (or both) must be set.
+
+- `PagesOfInterestDir` (string, optional): path to a directory
+  where an external entity writes pages-of-interest files. When set,
+  the policy reads PIDs and their virtual address ranges from this
+  directory instead of (or in addition to) scanning `/proc/PID/maps`.
+  Each file is named `<PID>.vab` (virtual addresses, binary format)
+  and contains a sequence of little-endian 64-bit address pairs:
+  `start_addr, end_addr, start_addr, end_addr, ...` where each pair
+  defines a contiguous range of pages of interest. A `lock` file in
+  the directory is used for `flock(2)`-based synchronization: the
+  external writer acquires `LOCK_EX` while updating files, and
+  memtierd acquires `LOCK_SH` (non-blocking) when reading. If the
+  exclusive lock is held, memtierd skips the scan round.
+  Either `PidWatcher` or `PagesOfInterestDir` (or both) must be set.
+
+- `Mover` (object, required): configures how pages are moved.
+  - `IntervalMs` (int): interval between `move_pages` syscalls in
+    milliseconds.
+  - `Bandwidth` (int): memory move bandwidth limit in MB/s. Use
+    high values (e.g. 10000) for fast demotion.
+
+**Example 1: PidWatcher mode (cgroups)**
+
+Demote idle pages of processes in a cgroup to NUMA nodes 2 and 3.
+Scan every 5 seconds.
+
+```
+policy:
+  name: demote-idle
+  config: |
+    intervalms: 5000
+    idlenumas: [2]
+    pidwatcher:
+      name: cgroups
+      config: |
+        intervalms: 10000
+        cgroups:
+          - /sys/fs/cgroup/workload
+    mover:
+      intervalms: 20
+      bandwidth: 2000
+```
+
+**Example 2: PagesOfInterestDir mode (external POI provider)**
+
+An external tool writes `<PID>.vab` files into `/var/run/poi`. Memtierd
+reads them and demotes idle pages to NUMA node 3. No PidWatcher is
+needed because the external provider specifies the PIDs and address
+ranges. Scan every 4 seconds with high mover bandwidth.
+
+```
+policy:
+  name: demote-idle
+  config: |
+    intervalms: 4000
+    idlenumas: [3]
+    pagesofinterestdir: /var/run/poi
+    mover:
+      intervalms: 20
+      bandwidth: 10000
+```
+
+**External POI provider locking protocol:**
+
+The external writer must follow this protocol when updating files in
+the PagesOfInterestDir:
+
+```bash
+# Acquire exclusive lock (blocks memtierd from reading)
+flock -o -x /var/run/poi/lock -c '
+    # Write or update .vab files while lock is held
+    python3 -c "
+import struct
+with open(\"/var/run/poi/12345.vab\", \"wb\") as f:
+    # Each range: (start_addr, end_addr) as little-endian uint64
+    f.write(struct.pack(\"<QQ\", 0x7f0000000000, 0x7f0000100000))
+"
+'
+# Lock is released when the flock command exits.
+# Use -o (--close) to prevent child processes from inheriting
+# the lock file descriptor.
+```
 
 ### The heat policy
 
