@@ -15,10 +15,16 @@
 package memtier
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -39,6 +45,15 @@ type PolicyDemoteIdleConfig struct {
 	// IdleNumas is the list of NUMA nodes where idle pages should
 	// be moved to.
 	IdleNumas []int
+	// PagesOfInterestDir is an optional directory path. When set,
+	// PIDs and their pages of interest are read from binary .vab
+	// (vab stands for Virtual Addresses, Binary format)
+	// files in this directory instead of (or in addition to) the
+	// PidWatcher/procMaps approach. Each file is named <PID>.vab
+	// and contains a sequence of little-endian (start, end) uint64
+	// address pairs. A "lock" file in the directory is used for
+	// flock(2)-based reader/writer synchronization.
+	PagesOfInterestDir string
 }
 
 // PolicyDemoteIdle implements the Policy interface.
@@ -82,20 +97,33 @@ func (p *PolicyDemoteIdle) SetConfig(config *PolicyDemoteIdleConfig) error {
 	if len(config.IdleNumas) == 0 {
 		return fmt.Errorf("demote-idle policy requires at least one IdleNumas entry")
 	}
-	if config.PidWatcher.Name == "" {
-		return fmt.Errorf("pidwatcher name missing from the demote-idle policy configuration")
+	if config.PidWatcher.Name == "" && config.PagesOfInterestDir == "" {
+		return fmt.Errorf("demote-idle policy requires pidwatcher or pagesofinterestdir")
 	}
-	newPidWatcher, err := NewPidWatcher(config.PidWatcher.Name)
-	if err != nil {
-		return err
+	if config.PagesOfInterestDir != "" {
+		info, err := os.Stat(config.PagesOfInterestDir)
+		if err != nil {
+			return fmt.Errorf("pagesofinterestdir %q: %w", config.PagesOfInterestDir, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("pagesofinterestdir %q is not a directory", config.PagesOfInterestDir)
+		}
 	}
-	if err = newPidWatcher.SetConfigJSON(config.PidWatcher.Config); err != nil {
-		return fmt.Errorf("configuring pidwatcher %q for the demote-idle policy failed: %w", config.PidWatcher.Name, err)
+	if config.PidWatcher.Name != "" {
+		newPidWatcher, err := NewPidWatcher(config.PidWatcher.Name)
+		if err != nil {
+			return err
+		}
+		if err = newPidWatcher.SetConfigJSON(config.PidWatcher.Config); err != nil {
+			return fmt.Errorf("configuring pidwatcher %q for the demote-idle policy failed: %w", config.PidWatcher.Name, err)
+		}
+		p.pidwatcher = newPidWatcher
+	} else {
+		p.pidwatcher = nil
 	}
-	if err = p.mover.SetConfig(&config.Mover); err != nil {
+	if err := p.mover.SetConfig(&config.Mover); err != nil {
 		return fmt.Errorf("configuring mover failed: %s", err)
 	}
-	p.pidwatcher = newPidWatcher
 	p.config = config
 	return nil
 }
@@ -195,12 +223,14 @@ func (p *PolicyDemoteIdle) Start() error {
 	if p.config == nil {
 		return fmt.Errorf("unconfigured policy")
 	}
-	if p.pidwatcher == nil {
-		return fmt.Errorf("missing pidwatcher")
+	if p.pidwatcher == nil && p.config.PagesOfInterestDir == "" {
+		return fmt.Errorf("missing pidwatcher and pagesofinterestdir")
 	}
-	p.pidwatcher.SetPidListener(p)
-	if err := p.pidwatcher.Start(); err != nil {
-		return fmt.Errorf("pidwatcher start error: %w", err)
+	if p.pidwatcher != nil {
+		p.pidwatcher.SetPidListener(p)
+		if err := p.pidwatcher.Start(); err != nil {
+			return fmt.Errorf("pidwatcher start error: %w", err)
+		}
 	}
 	if err := p.mover.Start(); err != nil {
 		return fmt.Errorf("mover start error: %w", err)
@@ -245,17 +275,33 @@ func (p *PolicyDemoteIdle) loop() {
 }
 
 func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
-	p.mutex.Lock()
-	// Take a snapshot of pids and their ranges under lock.
+	usePOIDir := p.config.PagesOfInterestDir != ""
+
 	type pidSnapshot struct {
 		pid    int
 		ranges []pageRange
 	}
-	snapshots := make([]pidSnapshot, 0, len(p.poi))
-	for pid, ranges := range p.poi {
-		snapshots = append(snapshots, pidSnapshot{pid, ranges})
+	var snapshots []pidSnapshot
+
+	if usePOIDir {
+		poiMap, err := p.readPOIDir()
+		if err != nil {
+			log.Debugf("PolicyDemoteIdle: readPOIDir error: %s\n", err)
+			return
+		}
+		snapshots = make([]pidSnapshot, 0, len(poiMap))
+		for pid, ranges := range poiMap {
+			snapshots = append(snapshots, pidSnapshot{pid, ranges})
+		}
+		log.Debugf("PolicyDemoteIdle: readPOIDir: %d pids\n", len(snapshots))
+	} else {
+		p.mutex.Lock()
+		snapshots = make([]pidSnapshot, 0, len(p.poi))
+		for pid, ranges := range p.poi {
+			snapshots = append(snapshots, pidSnapshot{pid, ranges})
+		}
+		p.mutex.Unlock()
 	}
-	p.mutex.Unlock()
 
 	bmFile, err := ProcPageIdleBitmapOpen()
 	if err != nil {
@@ -276,9 +322,11 @@ func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
 		pmFile, err := ProcPagemapOpen(pid)
 		if err != nil {
 			log.Debugf("PolicyDemoteIdle: pid %d: cannot open pagemap: %s\n", pid, err)
-			p.mutex.Lock()
-			delete(p.poi, pid)
-			p.mutex.Unlock()
+			if !usePOIDir {
+				p.mutex.Lock()
+				delete(p.poi, pid)
+				p.mutex.Unlock()
+			}
 			continue
 		}
 
@@ -299,33 +347,45 @@ func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
 		})
 		if err != nil {
 			log.Debugf("PolicyDemoteIdle: pid %d: ForEachPage scan error: %s\n", pid, err)
-			p.mutex.Lock()
-			delete(p.poi, pid)
-			p.mutex.Unlock()
+			if !usePOIDir {
+				p.mutex.Lock()
+				delete(p.poi, pid)
+				p.mutex.Unlock()
+			}
 			pmFile.Close()
 			continue
 		}
+		log.Debugf("PolicyDemoteIdle: pid %d: scanned %d ranges, found %d idle pages\n",
+			pid, len(ranges), len(idlePages))
 
-		// Demote idle pages not already on the target node.
+		// Demote idle pages.
 		if len(idlePages) > 0 && p.mover.TaskCount() == 0 {
 			pp := &Pages{pid: pid, pages: idlePages}
-			ppFiltered := pp.NotOnNode(destNode)
-			if ppFiltered != nil && len(ppFiltered.Pages()) > 0 {
-				task := NewMoverTask(ppFiltered, destNode)
+			if usePOIDir {
+				// POI dir mode: trust external source, move all idle pages.
+				task := NewMoverTask(pp, destNode)
 				p.mover.AddTask(task)
-				// Subtract moved pages from pages of interest.
-				movedRanges := pagesToPageRanges(ppFiltered)
-				p.mutex.Lock()
-				if current, ok := p.poi[pid]; ok {
-					p.poi[pid] = subtractSorted(current, movedRanges)
-				}
-				p.mutex.Unlock()
 				log.Debugf("PolicyDemoteIdle: pid %d: demoting %d idle pages to %s\n",
-					pid, len(ppFiltered.Pages()), destNode)
+					pid, len(idlePages), destNode)
+			} else {
+				// PidWatcher mode: filter out pages already on target.
+				ppFiltered := pp.NotOnNode(destNode)
+				if ppFiltered != nil && len(ppFiltered.Pages()) > 0 {
+					task := NewMoverTask(ppFiltered, destNode)
+					p.mover.AddTask(task)
+					movedRanges := pagesToPageRanges(ppFiltered)
+					p.mutex.Lock()
+					if current, ok := p.poi[pid]; ok {
+						p.poi[pid] = subtractSorted(current, movedRanges)
+					}
+					p.mutex.Unlock()
+					log.Debugf("PolicyDemoteIdle: pid %d: demoting %d idle pages to %s\n",
+						pid, len(ppFiltered.Pages()), destNode)
+				}
 			}
 		}
 
-		// Set idle bits on all remaining pages of interest so we can
+		// Set idle bits on all pages of interest so we can
 		// detect access on the next round.
 		alreadyIdle := map[uint64]struct{}{}
 		err = pmFile.ForEachPage(addrRanges, pmAttrs, func(pagemapBits uint64, pageAddr uint64) int {
@@ -339,13 +399,85 @@ func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
 			}
 			return 0
 		})
-		if err != nil {
+		if err != nil && !usePOIDir {
 			p.mutex.Lock()
 			delete(p.poi, pid)
 			p.mutex.Unlock()
 		}
 		pmFile.Close()
 	}
+}
+
+// readPOIDir reads pages of interest from .vab files in the configured
+// directory. Each file is named <PID>.vab and contains a sequence of
+// little-endian (start_addr, end_addr) uint64 pairs. A shared flock
+// on the "lock" file in the directory synchronizes with external writers.
+func (p *PolicyDemoteIdle) readPOIDir() (map[int][]pageRange, error) {
+	dir := p.config.PagesOfInterestDir
+	lockPath := filepath.Join(dir, "lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_RDONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("open lockfile %q: %w", lockPath, err)
+	}
+	defer lockFile.Close()
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
+		if err == syscall.EWOULDBLOCK {
+			log.Debugf("PolicyDemoteIdle: readPOIDir: lock busy, skipping round\n")
+			return nil, nil
+		}
+		return nil, fmt.Errorf("flock LOCK_SH %q: %w", lockPath, err)
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("readdir %q: %w", dir, err)
+	}
+
+	result := make(map[int][]pageRange)
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".vab") {
+			continue
+		}
+		pidStr := strings.TrimSuffix(name, ".vab")
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			continue
+		}
+
+		buf, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			log.Debugf("PolicyDemoteIdle: readPOIDir: read %s: %s\n", name, err)
+			continue
+		}
+		if len(buf)%16 != 0 {
+			log.Debugf("PolicyDemoteIdle: readPOIDir: %s: size %d not multiple of 16\n", name, len(buf))
+			continue
+		}
+
+		ranges := make([]pageRange, 0, len(buf)/16)
+		for i := 0; i+16 <= len(buf); i += 16 {
+			start := binary.LittleEndian.Uint64(buf[i:])
+			end := binary.LittleEndian.Uint64(buf[i+8:])
+			if end <= start {
+				continue
+			}
+			ranges = append(ranges, pageRange{
+				addr:   start,
+				length: (end - start) / constUPagesize,
+			})
+		}
+		sort.Slice(ranges, func(i, j int) bool {
+			return ranges[i].addr < ranges[j].addr
+		})
+		merged := mergePageRanges(ranges)
+		if len(merged) > 0 {
+			result[pid] = merged
+		}
+	}
+	return result, nil
 }
 
 // pageRangesToAddrRanges converts internal pageRange slice to []AddrRange
