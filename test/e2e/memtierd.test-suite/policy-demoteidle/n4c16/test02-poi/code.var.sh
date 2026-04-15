@@ -82,6 +82,7 @@ policy:
       bandwidth: 10000
 "
 memtierd-start
+MEMTIERD_START_TIME=$(date +%s)
 
 # Verify: empty dir (no lock file) → no pages move.
 sleep 8
@@ -126,6 +127,9 @@ N3_MB=$(( N3_PAGES * 4096 / 1048576 ))
 echo "phase 1 result: node3=${N3_MB}MB (${N3_PAGES} pages)"
 
 # Should have moved ~200M — not more (upper bound verifies range precision).
+PHASE1_DONE_TIME=$(date +%s)
+PHASE1_ELAPSED=$(( PHASE1_DONE_TIME - MEMTIERD_START_TIME ))
+echo "TIMING: phase 1 (200M idle demotion) completed in ${PHASE1_ELAPSED}s"
 if (( N3_MB < 100 )); then
     error "phase 1: expected >=100MB on node 3, got ${N3_MB}MB"
 fi
@@ -156,6 +160,9 @@ N3_MB=$(( N3_PAGES * 4096 / 1048576 ))
 echo "phase 2 result: node3=${N3_MB}MB (${N3_PAGES} pages)"
 
 # Should have ~200M (phase 1) + ~500M (phase 2) = ~700M total on node 3.
+PHASE2_DONE_TIME=$(date +%s)
+PHASE2_ELAPSED=$(( PHASE2_DONE_TIME - MEMTIERD_START_TIME ))
+echo "TIMING: phase 2 (full idle demotion) completed in ${PHASE2_ELAPSED}s"
 if (( N3_MB < 550 )); then
     error "phase 2: expected >=550MB on node 3, got ${N3_MB}MB"
 fi

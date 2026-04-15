@@ -312,6 +312,15 @@ func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
 
 	pmAttrs := uint64(PMPresentSet | PMExclusiveSet)
 
+	// Decide early if the mover can accept new tasks.
+	// If still busy from a previous scan/demote round, skip the expensive idle
+	// page scan and only set idle bits for the next round.
+	// If mover becomes free during the round, keep adding new tasks to it.
+	moverBusyFromOldTasks := p.mover.TaskCount() > 0
+	if moverBusyFromOldTasks {
+		log.Debugf("PolicyDemoteIdle: mover busy, setting idle bits only until mover is freed\n")
+	}
+
 	for _, snap := range snapshots {
 		pid := snap.pid
 		ranges := snap.ranges
@@ -330,57 +339,72 @@ func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
 			continue
 		}
 
-		// Collect idle page addresses for this pid.
-		idlePages := []Page{}
-
 		addrRanges := pageRangesToAddrRanges(ranges)
-		err = pmFile.ForEachPage(addrRanges, pmAttrs, func(pagemapBits uint64, pageAddr uint64) int {
-			pfn := pagemapBits & PM_PFN
-			pageIdle, err := bmFile.GetIdle(pfn)
-			if err != nil {
-				return 0
-			}
-			if pageIdle {
-				idlePages = append(idlePages, Page{addr: pageAddr})
-			}
-			return 0
-		})
-		if err != nil {
-			log.Debugf("PolicyDemoteIdle: pid %d: ForEachPage scan error: %s\n", pid, err)
-			if !usePOIDir {
-				p.mutex.Lock()
-				delete(p.poi, pid)
-				p.mutex.Unlock()
-			}
-			pmFile.Close()
-			continue
-		}
-		log.Debugf("PolicyDemoteIdle: pid %d: scanned %d ranges, found %d idle pages\n",
-			pid, len(ranges), len(idlePages))
 
-		// Demote idle pages.
-		if len(idlePages) > 0 && p.mover.TaskCount() == 0 {
-			pp := &Pages{pid: pid, pages: idlePages}
-			if usePOIDir {
-				// POI dir mode: trust external source, move all idle pages.
-				task := NewMoverTask(pp, destNode)
-				p.mover.AddTask(task)
-				log.Debugf("PolicyDemoteIdle: pid %d: demoting %d idle pages to %s\n",
-					pid, len(idlePages), destNode)
-			} else {
-				// PidWatcher mode: filter out pages already on target.
-				ppFiltered := pp.NotOnNode(destNode)
-				if ppFiltered != nil && len(ppFiltered.Pages()) > 0 {
-					task := NewMoverTask(ppFiltered, destNode)
-					p.mover.AddTask(task)
-					movedRanges := pagesToPageRanges(ppFiltered)
+		if moverBusyFromOldTasks {
+			moverBusyFromOldTasks = p.mover.TaskCount() > 0
+			log.Debugf("PolicyDemoteIdle: mover no more busy from old tasks, start adding new\n")
+		}
+
+		if !moverBusyFromOldTasks {
+			// Scan for idle pages. Two separate ForEachPage
+			// passes are required because SetIdleAll marks 64
+			// physical pages at once; combining GetIdle and
+			// SetIdleAll in one pass would corrupt idle state
+			// for pages sharing the same 64-PFN bitmap word.
+			idlePages := []Page{}
+			err = pmFile.ForEachPage(addrRanges, pmAttrs, func(pagemapBits uint64, pageAddr uint64) int {
+				pfn := pagemapBits & PM_PFN
+				pageIdle, err := bmFile.GetIdle(pfn)
+				if err != nil {
+					return 0
+				}
+				if pageIdle {
+					idlePages = append(idlePages, Page{addr: pageAddr})
+				}
+				return 0
+			})
+			if err != nil {
+				log.Debugf("PolicyDemoteIdle: pid %d: ForEachPage scan error: %s\n", pid, err)
+				if !usePOIDir {
 					p.mutex.Lock()
-					if current, ok := p.poi[pid]; ok {
-						p.poi[pid] = subtractSorted(current, movedRanges)
-					}
+					delete(p.poi, pid)
 					p.mutex.Unlock()
+				}
+				pmFile.Close()
+				continue
+			}
+			log.Debugf("PolicyDemoteIdle: pid %d: scanned %d ranges, found %d idle pages\n",
+				pid, len(ranges), len(idlePages))
+
+			// Submit task immediately so the mover can work
+			// in parallel while we process the next PID.
+			if len(idlePages) > 0 {
+				pp := &Pages{pid: pid, pages: idlePages}
+				if usePOIDir {
+					task := NewMoverTask(pp, destNode)
+					p.mover.AddTask(task)
 					log.Debugf("PolicyDemoteIdle: pid %d: demoting %d idle pages to %s\n",
-						pid, len(ppFiltered.Pages()), destNode)
+						pid, len(idlePages), destNode)
+				} else {
+					// Note: this filtering is very expensive: every page is queried
+					// with move_pages() syscall. The other alternative would be
+					// to just submit all idle pages to the mover, but then
+					// the mover may use significant part of the bandwidth on
+					// pages that are already on the destination NUMA node.
+					ppFiltered := pp.NotOnNode(destNode)
+					if ppFiltered != nil && len(ppFiltered.Pages()) > 0 {
+						task := NewMoverTask(ppFiltered, destNode)
+						p.mover.AddTask(task)
+						movedRanges := pagesToPageRanges(ppFiltered)
+						p.mutex.Lock()
+						if current, ok := p.poi[pid]; ok {
+							p.poi[pid] = subtractSorted(current, movedRanges)
+						}
+						p.mutex.Unlock()
+						log.Debugf("PolicyDemoteIdle: pid %d: demoting %d idle pages to %s\n",
+							pid, len(ppFiltered.Pages()), destNode)
+					}
 				}
 			}
 		}
