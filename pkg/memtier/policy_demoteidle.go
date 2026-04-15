@@ -352,8 +352,16 @@ func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
 			// physical pages at once; combining GetIdle and
 			// SetIdleAll in one pass would corrupt idle state
 			// for pages sharing the same 64-PFN bitmap word.
+			//
+			// Clear the readahead cache before scanning so
+			// GetIdle reads fresh data (SetIdleAll writes from
+			// the previous round are not reflected in the cache).
+			bmFile.SetReadahead(8)
 			idlePages := []Page{}
+			scanStartTime := time.Now().UnixNano()
+			var totScanned uint64
 			err = pmFile.ForEachPage(addrRanges, pmAttrs, func(pagemapBits uint64, pageAddr uint64) int {
+				totScanned++
 				pfn := pagemapBits & PM_PFN
 				pageIdle, err := bmFile.GetIdle(pfn)
 				if err != nil {
@@ -364,6 +372,7 @@ func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
 				}
 				return 0
 			})
+			scanEndTime := time.Now().UnixNano()
 			if err != nil {
 				log.Debugf("PolicyDemoteIdle: pid %d: ForEachPage scan error: %s\n", pid, err)
 				if !usePOIDir {
@@ -374,6 +383,13 @@ func (p *PolicyDemoteIdle) scanAndDemote(destNode Node) {
 				pmFile.Close()
 				continue
 			}
+			stats.Store(StatsPageScan{
+				pid:      pid,
+				scanned:  totScanned,
+				accessed: totScanned - uint64(len(idlePages)),
+				written:  0,
+				timeUs:   (scanEndTime - scanStartTime) / int64(time.Microsecond),
+			})
 			log.Debugf("PolicyDemoteIdle: pid %d: scanned %d ranges, found %d idle pages\n",
 				pid, len(ranges), len(idlePages))
 
