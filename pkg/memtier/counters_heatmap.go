@@ -59,10 +59,15 @@ type Heatmap struct {
 }
 
 // Heats stores the heatRanges information for the pid.
-type Heats map[int]*HeatRanges
+type Heats map[int]*HeatRangeOrderedMap
 
 // HeatRanges is a slice of HeatRange pointers.
 type HeatRanges []*HeatRange
+
+// HeatRangeOrderedMap represents a mapping of integers to HeatRange pointers.
+type HeatRangeOrderedMap struct {
+	OrderedMap[*HeatRange]
+}
 
 // HeatRange stores memory addresses, length, heat information and timestamps.
 type HeatRange struct {
@@ -98,10 +103,18 @@ func (hr *HeatRange) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
+// NewHeatRangeOrderedMap creates and returns a new instance of HeatRangeOrderedMap.
+func NewHeatRangeOrderedMap() *HeatRangeOrderedMap {
+	return &HeatRangeOrderedMap{
+		// Initialize the OrderedMap field with a new OrderedMap instance.
+		OrderedMap: *NewOrderedMap[*HeatRange](),
+	}
+}
+
 // NewCounterHeatmap creates a new Heatmap instance.
 func NewCounterHeatmap() *Heatmap {
 	heatmap := &Heatmap{
-		pidHrs: make(map[int]*HeatRanges),
+		pidHrs: make(map[int]*HeatRangeOrderedMap),
 	}
 	if err := heatmap.SetConfigJSON(HeatmapConfigDefaults); err != nil {
 		panic(fmt.Sprintf("heatmap default configuration error: %s", err))
@@ -139,9 +152,13 @@ func (h *Heatmap) Dump() string {
 	pids := h.Pids()
 	sort.Ints(pids)
 	for _, pid := range pids {
-		for n, hr := range *(h.pidHrs[pid]) {
-			lines = append(lines, fmt.Sprintf("pid: %d: %d %s (class %d)", pid, n, hr, h.HeatClass(hr)))
-		}
+		orderedmap := *(h.pidHrs[pid])
+		count := 0
+		orderedmap.Foreach(func(hr *HeatRange) int {
+			lines = append(lines, fmt.Sprintf("pid: %d: %d %s (class %d)", pid, count, hr, h.HeatClass(hr)))
+			count++
+			return 0
+		})
 	}
 	return strings.Join(lines, "\n")
 }
@@ -216,11 +233,11 @@ func (h *Heatmap) updateFromCounter(tc *TrackerCounter, timestamp int64) {
 func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 	hrs, ok := h.pidHrs[pid]
 	if !ok {
-		hrs = &HeatRanges{}
+		hrs = NewHeatRangeOrderedMap()
 		h.pidHrs[pid] = hrs
 	}
 	overlappingRanges := hrs.Overlapping(thr)
-	for _, hr := range *overlappingRanges {
+	for _, hr := range overlappingRanges {
 		if hr.addr < thr.addr {
 			// Case:
 			// |-------hr-------...
@@ -235,9 +252,12 @@ func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 				created: hr.created,
 				updated: hr.updated,
 			}
-			*hrs = append(*hrs, &newHr)
+			oldAddr := hr.addr
 			hr.addr = thr.addr
 			hr.length -= newHr.length
+			// old data has changed, update
+			(*hrs).updateHeatRangeOrderMap(hr, oldAddr)
+			(*hrs).addHeatRangeOrderMap(&newHr)
 		}
 		if thr.addr < hr.addr {
 			// Case:
@@ -253,7 +273,7 @@ func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 				created: thr.created,
 				updated: thr.updated,
 			}
-			*hrs = append(*hrs, &newHr)
+			(*hrs).addHeatRangeOrderMap(&newHr)
 			thr.addr = hr.addr
 			thr.length -= newHr.length
 		}
@@ -274,7 +294,7 @@ func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 				created: hr.created,
 				updated: hr.updated,
 			}
-			*hrs = append(*hrs, &newHr)
+			(*hrs).addHeatRangeOrderMap(&newHr)
 			hr.length -= newHr.length
 			hrEndAddr = thrEndAddr
 		}
@@ -300,6 +320,7 @@ func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 		//            |--thr--|
 		thr.length -= hr.length
 		thr.addr = hrEndAddr
+		(*hrs).addHeatRangeOrderMap(hr)
 	}
 	// Case: there is still a remaining, non-overlapping part of thr
 	// --last-overlapping-hr---|
@@ -312,31 +333,50 @@ func (h *Heatmap) updateFromPidHeatRange(pid int, thr *HeatRange) {
 			created: thr.created,
 			updated: thr.updated,
 		}
-		*hrs = append(*hrs, &newHr)
+		(*hrs).addHeatRangeOrderMap(&newHr)
 	}
-	hrs.Sort()
 }
 
-// Sort sorts the heatRanges by address.
-func (hrs *HeatRanges) Sort() {
-	sort.Slice(*hrs, func(i, j int) bool {
-		return (*hrs)[i].addr < (*hrs)[j].addr
-	})
+// addHeatRangeOrderMap adds a HeatRange to the HeatRangeOrderedMap.
+func (h *HeatRangeOrderedMap) addHeatRangeOrderMap(heatRange *HeatRange) {
+	h.Set(heatRange.addr, heatRange)
+}
+
+// updateHeatRangeOrderMap updates a HeatRange in the HeatRangeOrderedMap.
+func (h *HeatRangeOrderedMap) updateHeatRangeOrderMap(newHeatRange *HeatRange, oldAddr uint64) {
+	h.Delete(oldAddr)
+	h.addHeatRangeOrderMap(newHeatRange)
 }
 
 // Overlapping returns a subset of heatRanges that overlap with a given HeatRange.
-func (hrs *HeatRanges) Overlapping(hr0 *HeatRange) *HeatRanges {
-	first := sort.Search(len(*hrs), func(i int) bool { return (*hrs)[i].addr+(*hrs)[i].length*constUPagesize > hr0.addr })
+func (h *HeatRangeOrderedMap) Overlapping(hr0 *HeatRange) HeatRanges {
+	// Calculate the end address of hr0.
 	hr0EndAddr := hr0.addr + hr0.length*constUPagesize
-	count := 0
-	for _, hr := range (*hrs)[first:] {
-		if hr0EndAddr <= hr.addr {
-			break
-		}
-		count++
+
+	// Find heatRanges that overlap with hr0.
+	heatRanges := h.FindRange(hr0.addr, hr0EndAddr)
+
+	// If there are overlapping heatRanges, skip the first node if it doesn't overlap.
+	if len(heatRanges) == 0 {
+		return heatRanges
 	}
-	subHeatRanges := (*hrs)[first : first+count]
-	return &subHeatRanges
+	start := 0
+	for start < len(heatRanges) {
+		if (heatRanges[start].addr + heatRanges[start].length*constUPagesize) <= hr0.addr {
+			start++
+			continue
+		}
+		break
+	}
+	heatRanges = heatRanges[start:]
+
+	heatRangesLen := len(heatRanges)
+	if heatRangesLen > 0 {
+		if heatRanges[heatRangesLen-1].addr == hr0EndAddr {
+			heatRanges = heatRanges[:heatRangesLen-1]
+		}
+	}
+	return heatRanges
 }
 
 // HeatRangeAt returns a HeatRange at address.
@@ -350,10 +390,10 @@ func (h *Heatmap) HeatRangeAt(pid int, addr uint64) *HeatRange {
 		length: 1,
 	}
 	overlapping := hrs.Overlapping(&hr)
-	if len(*overlapping) != 1 {
+	if len(overlapping) != 1 {
 		return nil
 	}
-	return (*overlapping)[0]
+	return (overlapping)[0]
 }
 
 // ForEachRange iterates over heatranges of a pid in ascending address order.
@@ -365,27 +405,33 @@ func (h *Heatmap) ForEachRange(pid int, handleRange func(*HeatRange) int) {
 	if !ok {
 		return
 	}
-	for _, hr := range *hrs {
+	hrs.Foreach(func(hr *HeatRange) int {
 		next := handleRange(hr)
 		switch next {
 		case 0:
-			continue
+			return 0
 		case -1:
-			return
+			return -1
 		default:
 			panic(fmt.Sprintf("illegal heat range handler return value %d", next))
 		}
-	}
+	})
 }
 
 // Sorted returns sorted heatRanges based on a custom comparison function.
 func (h *Heatmap) Sorted(pid int, cmp func(*HeatRange, *HeatRange) bool) HeatRanges {
 	hrs, ok := h.pidHrs[pid]
-	if !ok || len(*hrs) == 0 {
+	size := hrs.Size()
+	if !ok || size == 0 {
 		return HeatRanges{}
 	}
-	retval := make(HeatRanges, len(*hrs))
-	copy(retval, *hrs)
+	retval := make(HeatRanges, size)
+	count := 0
+	hrs.Foreach(func(hr *HeatRange) int {
+		retval[count] = hr
+		count++
+		return 0
+	})
 	sort.Slice(retval, func(hri0, hri1 int) bool {
 		return cmp(retval[hri0], retval[hri1])
 	})
