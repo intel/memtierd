@@ -291,7 +291,7 @@ func (p *Prompt) RunCmdString(cmdString string) CommandStatus {
 func (p *Prompt) Interact() {
 	p.quit = false
 	for !p.quit {
-		p.output(p.ps1)
+		p.output("%s", p.ps1)
 		cmdString, err := p.r.ReadString(byte('\n'))
 		if err != nil {
 			p.output("quit: %s\n", err)
@@ -375,7 +375,7 @@ func (p *Prompt) cmdLog(args []string) CommandStatus {
 		log.Errorf(*optError)
 	}
 	if *optFatal != "" {
-		log.Fatalf(*optFatal)
+		log.Fatalf("%s", *optFatal)
 	}
 	if *optCopy || *optCapture {
 		p.outputMutex.Lock()
@@ -978,9 +978,9 @@ func (p *Prompt) cmdStats(args []string) CommandStatus {
 		return csOk
 	}
 	if *tables != "" {
-		p.output(GetStats().Summarize(*format, strings.Split(*tables, ",")...) + "\n")
+		p.output("%s", GetStats().Summarize(*format, strings.Split(*tables, ",")...)+"\n")
 	} else {
-		p.output(GetStats().Summarize(*format) + "\n")
+		p.output("%s", GetStats().Summarize(*format)+"\n")
 	}
 	return csOk
 }
@@ -1002,7 +1002,7 @@ func (p *Prompt) cmdPidWatcher(args []string) CommandStatus {
 	}
 	remainder := p.f.Args()
 	if *ls {
-		p.output(strings.Join(PidWatcherList(), "\n") + "\n")
+		p.output("%s", strings.Join(PidWatcherList(), "\n")+"\n")
 		return csOk
 	}
 	if *create != "" {
@@ -1100,7 +1100,7 @@ func (p *Prompt) cmdTracker(args []string) CommandStatus {
 	}
 	remainder := p.f.Args()
 	if *ls {
-		p.output(strings.Join(TrackerList(), "\n") + "\n")
+		p.output("%s", strings.Join(TrackerList(), "\n")+"\n")
 		return csOk
 	}
 	if *create != "" {
@@ -1170,7 +1170,7 @@ func (p *Prompt) cmdTracker(args []string) CommandStatus {
 			return csOk
 		}
 		tcs.SortByAccesses()
-		p.output(tcs.String() + "\n")
+		p.output("%s", tcs.String()+"\n")
 	}
 	if *heat {
 		tcs := p.tracker.GetCounters()
@@ -1203,7 +1203,7 @@ func (p *Prompt) cmdPolicy(args []string) CommandStatus {
 	}
 	remainder := p.f.Args()
 	if *ls {
-		p.output(strings.Join(PolicyList(), "\n") + "\n")
+		p.output("%s", strings.Join(PolicyList(), "\n")+"\n")
 		return csOk
 	}
 	if *create != "" {
@@ -1275,7 +1275,7 @@ func (p *Prompt) cmdRoutines(args []string) CommandStatus {
 	}
 	remainder := p.f.Args()
 	if *ls {
-		p.output(strings.Join(RoutineList(), "\n") + "\n")
+		p.output("%s", strings.Join(RoutineList(), "\n")+"\n")
 		return csOk
 	}
 	if *create != "" {

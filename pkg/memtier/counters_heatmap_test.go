@@ -45,7 +45,7 @@ func TestUpdateCountersBoundaryCheck(t *testing.T) {
 	timestamp := int64(0)
 	hm.UpdateFromCounters(&tcs0, timestamp)
 
-	t.Logf(hm.Dump())
+	t.Logf("%s", hm.Dump())
 
 	// Boundary value check: nil/non-nil
 	boundryTcases := []struct {
@@ -105,7 +105,7 @@ func TestUpdateCountersBoundaryCheck(t *testing.T) {
 	timestamp = 1 * int64(time.Second)
 	hm.UpdateFromCounters(&tcs1, timestamp)
 
-	t.Logf(hm.Dump())
+	t.Logf("%s", hm.Dump())
 }
 
 func TestUpdateCountersOverlappingRanges(t *testing.T) {

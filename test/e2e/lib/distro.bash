@@ -1,6 +1,6 @@
 # shellcheck disable=SC2120
 GO_URLDIR=https://golang.org/dl
-GO_VERSION=1.23.3
+GO_VERSION=1.27.3
 GOLANG_URL=$GO_URLDIR/go$GO_VERSION.linux-amd64.tar.gz
 CRICTL_VERSION=${CRICTL_VERSION:-"v1.25.0"}
 MINIKUBE_VERSION=${MINIKUBE_VERSION:-v1.27.0}
@@ -344,7 +344,7 @@ centos-8-image-url() {
 }
 
 centos-9-image-url() {
-    echo "https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-20250922.0.x86_64.qcow2"
+    echo "https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-20261019.0.x86_64.qcow2"
 }
 
 centos-10-image-url() {
