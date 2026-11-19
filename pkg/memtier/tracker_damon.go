@@ -684,8 +684,11 @@ func (t *TrackerDamon) Stop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	log.Debugf("TrackerDamon.Stop()")
-	//nolint:errcheck //ignore error that may cause "Operation not permitted" if monitoring was already off.
-	t.iface.ApplyState("off")
+	// iface is nil until the tracker is first configured.
+	if t.iface != nil {
+		//nolint:errcheck //ignore error that may cause "Operation not permitted" if monitoring was already off.
+		t.iface.ApplyState("off")
+	}
 	t.started = false
 	if t.toPerfReader != nil {
 		log.Debugf("TrackerDamon.Stop: stopping perfReader")
